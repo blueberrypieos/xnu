@@ -842,7 +842,7 @@ index a1c580a2..d219e39f 100644
  		notify = dlil_input_stats_sync(ifp, inp);
  
 diff --git a/xnu/bsd/nfs/gss/ccrypto.c b/xnu/bsd/nfs/gss/ccrypto.c
-index 64239e28..41dea4b6 100644
+index 64239e28..0c591605 100644
 --- a/xnu/bsd/nfs/gss/ccrypto.c
 +++ b/xnu/bsd/nfs/gss/ccrypto.c
 @@ -25,6 +25,7 @@
@@ -861,23 +861,7 @@ index 64239e28..41dea4b6 100644
  const struct ccmode_cbc  *
  ccaes_cbc_decrypt_mode(void)
  {
-@@ -96,6 +98,7 @@ ccpad_cts3_encrypt(const struct ccmode_cbc *cbc, cccbc_ctx *cbc_key,
- 	}
- 	return 0;
- }
-+#endif
- 
- const struct ccdigest_info *ccsha1_ltc_di_ptr;
- 
-@@ -108,6 +111,7 @@ ccsha1_di(void)
- 	return NULL;
- }
- 
-+#if !CONFIG_BUILTIN_CRYPTO
- void
- ccdes_key_set_odd_parity(void *key, unsigned long length)
- {
-@@ -115,3 +119,4 @@ ccdes_key_set_odd_parity(void *key, unsigned long length)
+@@ -115,3 +117,4 @@ ccdes_key_set_odd_parity(void *key, unsigned long length)
  		(*g_crypto_funcs->ccdes_key_set_odd_parity_fn)(key, length);
  	}
  }

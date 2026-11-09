@@ -27,9 +27,10 @@ KERNEL = $(KB)/$(1)/obj/DEVELOPMENT_ARM64_$(call uc,$(1))/kernel.development.$(1
 # kext NAME DIR SOURCES CXXFLAGS LIBDIRS
 KEXT = $(MAKE) -s -f $(K)/kext.mk KEXT=$(1) KEXT_OBJ=$(KX)/$(2) KEXT_PLIST=$(CURDIR)/kexts/$(2)/Info.plist \
 	KEXT_SOURCES="$(addprefix $(CURDIR)/kexts/$(2)/,$(3))" KEXT_CXXFLAGS="$(4)" \
-	KEXT_LIBDIRS="$(5)" KERNEL_BUILD=$(KB) all
+	KEXT_LIBDIRS="$(5)" KEXT_LDFLAGS="$(KEXT_OSO)" KERNEL_BUILD=$(KB) all
 PIEGPIO := -I$(CURDIR)/kexts/GPIO/include
-KEXT_NOTICE := KEXT_LDFLAGS=-Wl,-sectcreate,__TEXT,__source,$(CURDIR)/debian/kext-source-notice.txt
+KEXT_OSO := -Wl,-oso_prefix,$(CURDIR)/
+KEXT_NOTICE := KEXT_LDFLAGS="-Wl,-sectcreate,__TEXT,__source,$(CURDIR)/debian/kext-source-notice.txt $(KEXT_OSO)"
 
 EARLY := PIEWatchdog PIERandom PIERTC PIEDMA piegpio msdosfs IONetworkingFamily \
 	PIEEthernet PIEThermal PIEBoard IOSerialFamily PIESerial PIECPUFreq

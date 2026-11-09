@@ -1,3 +1,12 @@
+xnu (12377.121.6+pie2) blueberry-pie-os; urgency=medium
+
+  * Kexts record their object paths relative to the source tree, so the
+    build directory does not change them.
+  * Use piecrypto's SHA-1 descriptor in the built-in crypto provider.
+    The kernel panicked at boot.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Mon, 09 Nov 2026 20:19:55 +0000
+
 xnu (12377.121.6+pie1) blueberry-pie-os; urgency=medium
 
   * xnu 12377.121.6, with piecrypto.
