@@ -1,0 +1,1 @@
+This kext contains Covered Code under the Apple Public Source License 2.0. Its Source Code is available under that License from https://github.com/blueberrypieos/xnu.

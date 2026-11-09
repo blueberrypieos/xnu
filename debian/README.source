@@ -1,0 +1,6 @@
+This package contains Covered Code under the Apple Public Source License
+2.0, among other code. The Source Code of the Covered Code is available
+under the terms of that License from
+https://github.com/blueberrypieos/xnu/releases: the release whose tag is
+this package's version holds the source package (the .dsc and its
+tarball), and the repository holds the same tree with its submodules.

@@ -1,0 +1,4 @@
+foreign-arch xnu/osfmk/i386/pmCPU\.h osfmk/kern/startup.c includes <i386/pmCPU.h> on every architecture. The arm64 build uses none of it.
+foreign-arch xnu/osfmk/i386/cpu_topology\.h osfmk/i386/pmCPU.h includes it.
+foreign-arch xnu/osfmk/arm64/x86_64_compat\.h An arm64 header. It declares an arm64 check of the entitlements of x86_64 binaries.
+foreign-arch xnu/osfmk/arm64/x86_64_compat\.c The arm64 code for that header. osfmk/conf/files.arm64 builds it.

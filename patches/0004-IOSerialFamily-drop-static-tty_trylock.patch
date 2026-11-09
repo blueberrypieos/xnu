@@ -1,0 +1,56 @@
+Description: Use the kernel's tty_trylock
+ xnu exports tty_trylock, so IOSerialBSDClient's own static copy
+ conflicts with its declaration.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-07
+
+diff --git a/src/IOSerialFamily/IOSerialFamily.kmodproj/IOSerialBSDClient.cpp b/src/IOSerialFamily/IOSerialFamily.kmodproj/IOSerialBSDClient.cpp
+index 284171e..da3532a 100644
+--- a/src/IOSerialFamily/IOSerialFamily.kmodproj/IOSerialBSDClient.cpp
++++ b/src/IOSerialFamily/IOSerialFamily.kmodproj/IOSerialBSDClient.cpp
+@@ -19,6 +19,31 @@
+  * 
+  * @APPLE_LICENSE_HEADER_END@
+  */
++/*
++ * Modifications Copyright (c) 2026 The Blueberry Pie OS Authors.
++ * Modified 2026-11-01: the kernel's tty_trylock is used (APSL 2.0 section 2.2(b)).
++ *
++ * This file was originally made available by Apple under the Apple Public
++ * Source License Version 1.1. Pursuant to section 7 of that license, it is
++ * used and distributed here under the Apple Public Source License
++ * Version 2.0.
++ */
++/*
++ * This file contains Original Code and/or Modifications of Original Code
++ * as defined in and that are subject to the Apple Public Source License
++ * Version 2.0 (the 'License'). You may not use this file except in
++ * compliance with the License. Please obtain a copy of the License at
++ * http://www.opensource.apple.com/apsl/ and read it before using this
++ * file.
++ *
++ * The Original Code and all software distributed under the License are
++ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
++ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
++ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
++ * Please see the License for the specific language governing rights and
++ * limitations under the License.
++ */
+ // 45678901234567890123456789012345678901234567890123456789012345678901234567890
+ /*
+  * IOSerialBSDClient.cpp
+@@ -74,12 +99,6 @@ __END_DECLS
+ 
+ OSDefineMetaClassAndStructors(IOSerialBSDClient, IOService)
+ 
+-// TODO Move to xnu:bsd/kern/tty.c
+-static boolean_t
+-tty_trylock(struct tty *tp)
+-{
+-	return lck_mtx_try_lock(&tp->t_lock);
+-}
+ 
+ /*
+  * enable/disable kprint debugging

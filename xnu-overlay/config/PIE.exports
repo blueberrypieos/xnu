@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 The Blueberry Pie OS Authors
+_RPiCPUAddress
+_RPiDMAAddress
+_RPiDTFindCompatible
+_RPiFirmwareProperty
+_cdevsw_set_mmap
+_pie_mmap_memory
+_pie_mmap_physical
+_pie_console_takeover
+_pie_console_set_graphics
+_pie_console_graphics
+_pie_panic_display_register
+_sysctl__hw_children
+_PE_current_console
+_cdevsw_setkqueueok
+_write_random
+_pie_watchdog_takeover
+_pie_watchdog_handback
+_pie_cpu_count
+_pie_cpu_times
+__ZN12IOUserClient27copyPortNameForObjectInTaskEP4taskP8OSObjectPj
+__ZN12IOUserClient27copyObjectForPortNameInTaskEP4taskjPP8OSObject
+__ZN12IOUserClient30adjustPortNameReferencesInTaskEP4taskji
+_clock_get_boottime_microtime

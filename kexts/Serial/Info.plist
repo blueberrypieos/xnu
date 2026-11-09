@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: BSD-2-Clause -->
+<!-- Copyright (c) 2026 The Blueberry Pie OS Authors -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>English</string>
+	<key>CFBundleExecutable</key>
+	<string>PIESerial</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.blueberrypieos.driver.Serial</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>PIESerial</string>
+	<key>CFBundlePackageType</key>
+	<string>KEXT</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1.0</string>
+	<key>IOKitPersonalities</key>
+	<dict>
+		<key>RPiPL011Serial</key>
+		<dict>
+			<key>CFBundleIdentifier</key>
+			<string>com.blueberrypieos.driver.Serial</string>
+			<key>IOClass</key>
+			<string>RPiPL011Serial</string>
+			<key>IOProviderClass</key>
+			<string>IOPlatformDevice</string>
+			<key>IONameMatch</key>
+			<array>
+				<string>arm,pl011</string>
+				<string>arm,pl011-axi</string>
+			</array>
+		</dict>
+	</dict>
+	<key>OSBundleLibraries</key>
+	<dict>
+		<key>com.apple.iokit.IOSerialFamily</key>
+		<string>1.0.4</string>
+		<key>com.apple.kpi.bsd</key>
+		<string>8.0</string>
+		<key>com.apple.kpi.iokit</key>
+		<string>8.0</string>
+		<key>com.apple.kpi.libkern</key>
+		<string>8.0</string>
+		<key>com.apple.kpi.mach</key>
+		<string>8.0</string>
+		<key>com.blueberrypieos.kpi.platform</key>
+		<string>1.0</string>
+	</dict>
+	<key>OSBundleRequired</key>
+	<string>Root</string>
+</dict>
+</plist>

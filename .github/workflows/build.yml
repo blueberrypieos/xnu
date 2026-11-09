@@ -1,0 +1,155 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  PIETOOLCHAIN_VERSION: '0.1.0'
+  PIETOOLCHAIN_SHA256: baf60991468d48b7dc62761196a117437c8a0989a46bd200435d82d87ed7dc1d
+  PIETOOLCHAIN_SDK_SHA256: 3e8e01aeea1aed87ad1518ce3c6d673ae634a64e1b90d04c73ae8bdfe06943b2
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.source.outputs.name }}
+    steps:
+      - name: Host packages
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            dpkg-dev devscripts lintian licenserecon xz-utils python3
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Submodules
+        run: git submodule update --init --recursive --depth 1 --jobs 8
+
+      - name: The workflows' tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: blueberrypieos/workflows
+          ref: f87a98ea145aed8e3d116e85f12885249a054b4d # v1
+          path: .workflows
+          persist-credentials: false
+
+      - name: Check tag matches debian/changelog
+        if: github.ref_type == 'tag'
+        run: |
+          version=$(dpkg-parsechangelog -SVersion)
+          if [ "$GITHUB_REF_NAME" != "$version" ]; then
+            echo "tag $GITHUB_REF_NAME is not $version, debian/changelog's version" >&2
+            exit 1
+          fi
+
+      - name: Source package
+        id: source
+        run: |
+          python3 .workflows/tools/pie-source source -o "$RUNNER_TEMP/source"
+          echo "name=xnu_$(dpkg-parsechangelog -SVersion)" >> "$GITHUB_OUTPUT"
+          ls -l "$RUNNER_TEMP/source"
+
+      - name: Check the source package
+        run: python3 .workflows/tools/pie-verify check "$RUNNER_TEMP/source/${{ steps.source.outputs.name }}.dsc"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.source.outputs.name }}_source
+          path: ${{ runner.temp }}/source/
+          if-no-files-found: error
+
+  binary:
+    needs: source
+    runs-on: ubuntu-26.04
+    container: ubuntu:26.04
+    permissions:
+      contents: read
+    outputs:
+      artifact: ${{ needs.source.outputs.name }}
+    steps:
+      - name: Host packages
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            ca-certificates curl dpkg-dev build-essential devscripts
+
+      - name: pietoolchain and pietoolchain-sdk
+        run: |
+          github=https://github.com/blueberrypieos
+          tc="pietoolchain_${PIETOOLCHAIN_VERSION}_amd64.deb"
+          sdk="pietoolchain-sdk_${PIETOOLCHAIN_VERSION}_all.deb"
+          curl -fsSL --retry 3 -o "/tmp/$tc" \
+            "$github/pietoolchain/releases/download/$PIETOOLCHAIN_VERSION/$tc"
+          curl -fsSL --retry 3 -o "/tmp/$sdk" \
+            "$github/pietoolchain/releases/download/$PIETOOLCHAIN_VERSION/$sdk"
+          printf '%s  %s\n' "$PIETOOLCHAIN_SHA256" "/tmp/$tc" \
+            "$PIETOOLCHAIN_SDK_SHA256" "/tmp/$sdk" | sha256sum -c -
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "/tmp/$tc" "/tmp/$sdk"
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.source.outputs.name }}_source
+          path: /build/source/
+
+      - name: Extract the source package
+        run: dpkg-source -x "/build/source/${{ needs.source.outputs.name }}.dsc" /build/src
+
+      - name: Build dependencies
+        run: DEBIAN_FRONTEND=noninteractive apt-get build-dep -y --no-install-recommends /build/src
+
+      - name: Binary packages
+        working-directory: /build/src
+        run: dpkg-buildpackage -a darwin-arm64 -b -us -uc -j$(nproc)
+
+      - name: Packages
+        run: |
+          name='${{ needs.source.outputs.name }}'
+          cd /build
+          cp source/* .
+          mergechanges -f "${name}_source.changes" "${name}_darwin-arm64.changes"
+          mv "${name}_multi.changes" "${name}_darwin-arm64.changes"
+          mkdir -p "$GITHUB_WORKSPACE/dist"
+          cp "${name}_darwin-arm64.changes" "$GITHUB_WORKSPACE/dist/"
+          sed -n '/^Files:/,/^[^ ]/s/^ [0-9a-f]\{32\} [0-9]* [^ ]* [^ ]* //p' "${name}_darwin-arm64.changes" |
+            while read -r f; do cp "$f" "$GITHUB_WORKSPACE/dist/"; done
+          ls -l "$GITHUB_WORKSPACE/dist/"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ needs.source.outputs.name }}
+          path: dist/
+          if-no-files-found: error
+
+  attest:
+    needs: binary
+    if: >-
+      github.event_name == 'push' &&
+      (github.ref_type == 'tag' ||
+       github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: blueberrypieos/workflows/.github/workflows/attest.yml@f87a98ea145aed8e3d116e85f12885249a054b4d # v1
+    with:
+      artifact: ${{ needs.binary.outputs.artifact }}
+
+  release:
+    needs: [binary, attest]
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    permissions:
+      contents: write
+    uses: blueberrypieos/workflows/.github/workflows/release.yml@f87a98ea145aed8e3d116e85f12885249a054b4d # v1
+    with:
+      artifact: ${{ needs.binary.outputs.artifact }}

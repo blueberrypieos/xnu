@@ -1,0 +1,9 @@
+xnu (12377.121.6+pie1) blueberry-pie-os; urgency=medium
+
+  * xnu 12377.121.6, with piecrypto.
+  * The source package keeps only the files the build reads.
+  * debian/copyright covers only those files.
+  * The APSL 1.x files are used under APSL 2.0, as section 7 of each
+    version permits.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Sun, 01 Nov 2026 23:27:06 +0000

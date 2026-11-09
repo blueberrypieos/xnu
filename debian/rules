@@ -1,0 +1,102 @@
+#!/usr/bin/make -f
+# SPDX-License-Identifier: BSD-2-Clause
+# Copyright (c) 2026 The Blueberry Pie OS Authors
+
+include /usr/share/pietoolchain/rules.mk
+
+K    := $(TOOLCHAIN)/kernel
+KSDK := $(W)/sdk/MacOSX.sdk
+KB   := $(W)/kernels
+KX   := $(W)/kexts
+BOOT := usr/lib/blueberry-pie-os/boot
+EXT  := System/Library/Extensions
+DEV  := usr/lib/blueberry-pie-os/kernel
+SOCS := bcm2711 bcm2712
+T    := $(CURDIR)/debian/build/tree
+PATCHED := IONetworkingFamily IOSerialFamily msdosfs
+
+export PIE_SDKROOT        := $(KSDK)
+export PIE_KERNEL_SOURCES := $(T)/src
+export PIE_KERNEL_BUILD   := $(W)/libs
+export PIE_XNU_SOURCE     := $(T)/xnu
+
+XNU_MAKE = env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL JOBS=$(JOBS) $(TOOLCHAIN)/xnu-make -C $(T)/xnu ARCH_CONFIGS=ARM64 BUILD_LTO=0
+uc = $(shell echo $(1) | tr a-z A-Z)
+KERNEL = $(KB)/$(1)/obj/DEVELOPMENT_ARM64_$(call uc,$(1))/kernel.development.$(1)
+
+# kext NAME DIR SOURCES CXXFLAGS LIBDIRS
+KEXT = $(MAKE) -s -f $(K)/kext.mk KEXT=$(1) KEXT_OBJ=$(KX)/$(2) KEXT_PLIST=$(CURDIR)/kexts/$(2)/Info.plist \
+	KEXT_SOURCES="$(addprefix $(CURDIR)/kexts/$(2)/,$(3))" KEXT_CXXFLAGS="$(4)" \
+	KEXT_LIBDIRS="$(5)" KERNEL_BUILD=$(KB) all
+PIEGPIO := -I$(CURDIR)/kexts/GPIO/include
+KEXT_NOTICE := KEXT_LDFLAGS=-Wl,-sectcreate,__TEXT,__source,$(CURDIR)/debian/kext-source-notice.txt
+
+EARLY := PIEWatchdog PIERandom PIERTC PIEDMA piegpio msdosfs IONetworkingFamily \
+	PIEEthernet PIEThermal PIEBoard IOSerialFamily PIESerial PIECPUFreq
+
+install:
+	rm -rf debian/build/tree
+	mkdir -p $(T)/src
+	cp -a --parents xnu $(addprefix src/,$(PATCHED)) $(T)/
+	cp -R xnu-overlay/. $(T)/xnu/
+	set -e; for c in $(filter-out $(PATCHED),$(notdir $(wildcard src/*))); do ln -s $(CURDIR)/src/$$c $(T)/src/$$c; done
+	set -e; for p in patches/*.patch; do patch -d $(T) -p1 -s -f --no-backup-if-mismatch < $$p; done
+	$(K)/make-sdk.sh new
+	$(XNU_MAKE) KERNEL_CONFIGS=RELEASE MACHINE_CONFIGS=VMAPPLE ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG=arm64 \
+		OBJROOT=$(W)/hdrs/obj SYMROOT=$(W)/hdrs/sym DSTROOT=$(W)/hdrs/dst installhdrs
+	$(K)/make-sdk.sh xnu-hdrs $(W)/hdrs/dst
+	$(K)/make-sdk.sh firehose
+	$(K)/build-cckext.sh
+	$(K)/build-pthread-kext.sh
+	$(K)/build-hfs-kext.sh
+	$(K)/build-piecrypto-kext.sh
+	$(K)/build-iostorage-kext.sh
+	set -e; for soc in $(SOCS); do \
+		SOC=$$(echo $$soc | tr a-z A-Z); \
+		PIE_REPRO_OBJROOT=$(KB)/$$soc/obj $(XNU_MAKE) KERNEL_CONFIGS=DEVELOPMENT MACHINE_CONFIGS=$$SOC BUILD_DSYM=0 \
+			INCFLAGS_EXTERN="-I$(T)/src/piecrypto/include -I$(T)/xnu/EXTERNAL_HEADERS" \
+			OBJROOT=$(KB)/$$soc/obj SYMROOT=$(KB)/$$soc/sym DSTROOT=$(KB)/$$soc/dst; \
+	done
+	PIE_REPRO_SOURCE=$(T)/src KERNEL_BUILD=$(KB) KEXT_OBJ=$(KX)/IONetworkingFamily $(KEXT_NOTICE) $(K)/build-ionetworking-kext.sh
+	PIE_REPRO_SOURCE=$(T)/src KERNEL_BUILD=$(KB) KEXT_OBJ=$(KX)/msdosfs $(KEXT_NOTICE) $(K)/build-msdosfs-kext.sh
+	PIE_REPRO_SOURCE=$(T)/src KERNEL_BUILD=$(KB) KEXT_OBJ=$(KX)/IOSerialFamily $(KEXT_NOTICE) $(K)/build-ioserial-kext.sh
+	$(call KEXT,PIEBoard,Board,RPiBoard.cpp,$(PIEGPIO))
+	$(call KEXT,PIECPUFreq,CPUFreq,RPiCPUFreq.cpp)
+	$(call KEXT,PIEDMA,DMA,DMAController.cpp DMABCM2835.cpp DMADWAxi.cpp,-I$(CURDIR)/kexts/DMA/include)
+	$(call KEXT,piegpio,GPIO,PieGPIOController.cpp PieGPIOUserClient.cpp PieGPIOBCM2711.cpp PieGPIORP1.cpp \
+		PieGPIOBrcmstb.cpp,$(PIEGPIO))
+	$(call KEXT,PIEEthernet,Ethernet,RPiGENET.cpp RPiGEM.cpp RPiPHY.cpp VirtioMMIONet.cpp,,$(KX)/IONetworkingFamily)
+	$(call KEXT,PIERTC,RTC,RPiRTC.cpp)
+	$(call KEXT,PIERandom,Random,RPiRNG200.cpp)
+	$(call KEXT,PIESerial,Serial,RPiPL011Serial.cpp,$(PIEGPIO),$(KX)/IOSerialFamily)
+	$(call KEXT,PIEThermal,Thermal,RPiThermal.cpp,$(PIEGPIO))
+	$(call KEXT,PIEWatchdog,Watchdog,RPiWatchdog.cpp)
+	python3 $(CURDIR)/src/pieboot/mkbundle.py -o $(W)/xnu.bundle \
+		-k "bcm2712=$(patsubst $(CURDIR)/%,%,$(call KERNEL,bcm2712)):brcm,bcm2712:brcm,bcm2712d0+16k,lse,pan" \
+		-k "bcm2711=$(patsubst $(CURDIR)/%,%,$(call KERNEL,bcm2711))"
+	install -D -m 644 $(W)/xnu.bundle $(ROOT)/$(BOOT)/xnu.bundle
+	set -e; for soc in $(SOCS); do \
+		SOC=$$(echo $$soc | tr a-z A-Z); \
+		$(K)/mksystemkext.sh $(KB)/$$soc/obj/DEVELOPMENT_ARM64_$$SOC/config $(ROOT)/$(DEV)/$$soc; \
+	done
+	install -d $(ROOT)/$(EXT)
+	set -e; a=$$(debian/interface.sh $(NM) $(ROOT)/$(DEV)/bcm2711); b=$$(debian/interface.sh $(NM) $(ROOT)/$(DEV)/bcm2712); \
+	if [ "$$a" = "$$b" ]; then \
+		cp -R $(ROOT)/$(DEV)/bcm2711/System.kext $(ROOT)/$(EXT)/System.kext; \
+	else \
+		for soc in $(SOCS); do cp -R $(ROOT)/$(DEV)/$$soc/System.kext $(ROOT)/$(EXT)/System-$$soc.kext; done; \
+	fi
+	set -e; for k in IONetworkingFamily/IONetworkingFamily msdosfs/msdosfs Ethernet/PIEEthernet Thermal/PIEThermal \
+		Random/PIERandom Watchdog/PIEWatchdog RTC/PIERTC IOSerialFamily/IOSerialFamily Serial/PIESerial \
+		CPUFreq/PIECPUFreq Board/PIEBoard DMA/PIEDMA GPIO/piegpio; do \
+		cp -R $(KX)/$$k.kext $(ROOT)/$(EXT)/; \
+	done
+	install -d $(ROOT)/usr/lib/blueberry-pie-os
+	printf '%s.kext\n' $(EARLY) > $(ROOT)/usr/lib/blueberry-pie-os/kexts.early
+	install -D -m 755 debian/blueberry-pie-os-kernel.postinst $(ROOT)/DEBIAN/postinst
+	set -e; for p in blueberry-pie-os-kernel blueberry-pie-os-kernel-dev; do \
+		install -D -m 644 debian/README.source $(ROOT)/usr/share/doc/$$p/README.source; \
+	done
+	debian/sdk-delta.sh $(SDK) $(KSDK) $(ROOT)
+
+.PHONY: install

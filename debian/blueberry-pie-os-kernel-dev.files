@@ -1,0 +1,6 @@
+usr/lib/blueberry-pie-os/kernel
+System/Library/Frameworks
+usr/include
+usr/local/include
+usr/lib/libcc_kext.a
+usr/share/doc/blueberry-pie-os-kernel-dev

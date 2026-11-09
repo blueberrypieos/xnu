@@ -1,0 +1,27 @@
+Source: xnu
+Section: kernel
+Priority: optional
+Maintainer: Maxwell <maxwell@blueberrypieos.com>
+Build-Depends: pietoolchain (>= 0.1.0)
+Standards-Version: 4.7.3
+Homepage: https://github.com/blueberrypieos/xnu
+Vcs-Git: https://github.com/blueberrypieos/xnu.git
+Vcs-Browser: https://github.com/blueberrypieos/xnu
+Rules-Requires-Root: no
+
+Package: blueberry-pie-os-kernel
+Architecture: darwin-arm64
+Priority: required
+Depends: base-files (>= 0-1), kext-tools
+Breaks: blueberry-pie-os-boot (<< 1.3)
+Description: the xnu kernels for the Pi 4 and Pi 5, for the boot partition
+ xnu's DEVELOPMENT kernels for the BCM2711 and BCM2712, in one bundle that
+ pieboot loads, with the kexts the kernel loads first: the networking,
+ serial and FAT families and the board's drivers.
+
+Package: blueberry-pie-os-kernel-dev
+Architecture: darwin-arm64
+Section: devel
+Description: files for building kexts against the kernels
+ The kernel SDK's headers and libcc_kext, and each kernel's System.kext,
+ for building kexts with pietoolchain's kext.mk.

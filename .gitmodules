@@ -1,0 +1,36 @@
+[submodule "xnu"]
+	path = xnu
+	url = https://github.com/apple-oss-distributions/xnu.git
+[submodule "src/AvailabilityVersions"]
+	path = src/AvailabilityVersions
+	url = https://github.com/apple-oss-distributions/AvailabilityVersions
+[submodule "src/IOStorageFamily"]
+	path = src/IOStorageFamily
+	url = https://github.com/apple-oss-distributions/IOStorageFamily
+[submodule "src/hfs"]
+	path = src/hfs
+	url = https://github.com/apple-oss-distributions/hfs
+[submodule "src/libdispatch"]
+	path = src/libdispatch
+	url = https://github.com/apple-oss-distributions/libdispatch
+[submodule "src/libpthread"]
+	path = src/libpthread
+	url = https://github.com/apple-oss-distributions/libpthread
+[submodule "src/llvm-project"]
+	path = src/llvm-project
+	url = https://github.com/llvm/llvm-project.git
+[submodule "src/piecrypto"]
+	path = src/piecrypto
+	url = https://github.com/blueberrypieos/piecrypto.git
+[submodule "src/IONetworkingFamily"]
+	path = src/IONetworkingFamily
+	url = https://github.com/apple-oss-distributions/IONetworkingFamily
+[submodule "src/IOSerialFamily"]
+	path = src/IOSerialFamily
+	url = https://github.com/apple-oss-distributions/IOSerialFamily
+[submodule "src/msdosfs"]
+	path = src/msdosfs
+	url = https://github.com/apple-oss-distributions/msdosfs
+[submodule "src/pieboot"]
+	path = src/pieboot
+	url = https://github.com/blueberrypieos/pieboot.git
