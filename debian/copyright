@@ -3678,7 +3678,8 @@ Copyright: 1996-1999 Internet Software Consortium
  2004 Internet Systems Consortium, Inc. ("ISC")
 License: ISC
 
-Files: xnu/EXTERNAL_HEADERS/ptrcheck.h
+Files: src/llvm-project/*
+ xnu/EXTERNAL_HEADERS/ptrcheck.h
 Copyright: The LLVM Project contributors
 License: Apache-2.0 with LLVM exception
 
@@ -4373,10 +4374,6 @@ License: ISC
 Files: src/piecrypto/third_party/libtomcrypt/*
 Copyright: Tom St Denis
 License: Unlicense
-
-Files: src/llvm-project/*
-Copyright: The LLVM Project contributors
-License: Apache-2.0 with LLVM exception
 
 Files: src/llvm-project/LICENSE.TXT
 Copyright: The LLVM Project contributors

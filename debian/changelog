@@ -4,8 +4,10 @@ xnu (12377.121.6+pie2) blueberry-pie-os; urgency=medium
     build directory does not change them.
   * Use piecrypto's SHA-1 descriptor in the built-in crypto provider.
     The kernel panicked at boot.
+  * Root processes may register as the identity resolver, so ACLs can
+    name users and groups.
 
- -- Maxwell <maxwell@blueberrypieos.com>  Mon, 09 Nov 2026 20:19:55 +0000
+ -- Maxwell <maxwell@blueberrypieos.com>  Wed, 11 Nov 2026 04:53:56 +0000
 
 xnu (12377.121.6+pie1) blueberry-pie-os; urgency=medium
 

@@ -6,6 +6,7 @@
 #include <kern/startup.h>
 #include <libkern/libkern.h>
 #include <libkern/amfi/amfi.h>
+#include <sys/kauth.h>
 
 #pragma mark Entitlements
 
@@ -93,9 +94,19 @@ builtin_queryEntitlementBoolean(const void *os_entitlements __unused, const char
 }
 
 static kern_return_t
-builtin_queryEntitlementBooleanWithProc(const proc_t proc __unused, const char *entitlement_name __unused)
+builtin_queryEntitlementBooleanWithProc(const proc_t proc, const char *entitlement_name)
 {
-	return KERN_NOT_FOUND;
+	kauth_cred_t cred;
+	uid_t uid;
+
+	if (proc == NULL || entitlement_name == NULL ||
+	    strcmp(entitlement_name, IDENTITYSVC_ENTITLEMENT) != 0) {
+		return KERN_NOT_FOUND;
+	}
+	cred = kauth_cred_proc_ref(proc);
+	uid = kauth_cred_getuid(cred);
+	kauth_cred_unref(&cred);
+	return uid == 0 ? KERN_SUCCESS : KERN_NOT_FOUND;
 }
 
 static kern_return_t

@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
 
 env:
-  PIETOOLCHAIN_VERSION: '0.1.0'
-  PIETOOLCHAIN_SHA256: baf60991468d48b7dc62761196a117437c8a0989a46bd200435d82d87ed7dc1d
-  PIETOOLCHAIN_SDK_SHA256: 3e8e01aeea1aed87ad1518ce3c6d673ae634a64e1b90d04c73ae8bdfe06943b2
+  PIETOOLCHAIN_VERSION: '0.2.0'
+  PIETOOLCHAIN_SHA256: 495ced992885c4717bcb468607d473934aef74046d82dd54bae36777942f4c63
+  PIETOOLCHAIN_SDK_SHA256: 65568a3a247c9f457c9360342a2eeb74535e579e08a14a2933ca5d99ca89a709
 
 permissions:
   contents: read
@@ -39,7 +39,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: blueberrypieos/workflows
-          ref: f87a98ea145aed8e3d116e85f12885249a054b4d # v1
+          ref: 21669c62ddbce5aca5cbabd8066073cf37a35c65 # v2
           path: .workflows
           persist-credentials: false
 
@@ -141,7 +141,7 @@ jobs:
       id-token: write
       attestations: write
       artifact-metadata: write
-    uses: blueberrypieos/workflows/.github/workflows/attest.yml@f87a98ea145aed8e3d116e85f12885249a054b4d # v1
+    uses: blueberrypieos/workflows/.github/workflows/attest.yml@21669c62ddbce5aca5cbabd8066073cf37a35c65 # v2
     with:
       artifact: ${{ needs.binary.outputs.artifact }}
 
@@ -150,6 +150,6 @@ jobs:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     permissions:
       contents: write
-    uses: blueberrypieos/workflows/.github/workflows/release.yml@f87a98ea145aed8e3d116e85f12885249a054b4d # v1
+    uses: blueberrypieos/workflows/.github/workflows/release.yml@21669c62ddbce5aca5cbabd8066073cf37a35c65 # v2
     with:
       artifact: ${{ needs.binary.outputs.artifact }}
