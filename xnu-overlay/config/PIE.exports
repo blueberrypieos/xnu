@@ -17,6 +17,8 @@ _cdevsw_setkqueueok
 _write_random
 _pie_watchdog_takeover
 _pie_watchdog_handback
+_pie_watchdog_boot_deadline
+_pie_watchdog_boot_restore
 _pie_cpu_count
 _pie_cpu_times
 __ZN12IOUserClient27copyPortNameForObjectInTaskEP4taskP8OSObjectPj

@@ -11,6 +11,7 @@
 #include "../../pie/watchdog.h"
 
 extern "C" {
+#include <kern/clock.h>
 #include <kern/thread_call.h>
 #include <pexpert/pexpert.h>
 }
@@ -27,6 +28,8 @@ enum {
 #define kTimeoutS       15
 #define kPetMs          1000
 #define kFirmwareTries  30
+#define kBootMinS       60
+#define kBootMaxS       86400
 
 enum Owner { kOwnerUndecided, kOwnerNone, kOwnerKernel, kOwnerKext };
 
@@ -39,6 +42,8 @@ static Owner sOwner = kOwnerUndecided;
 static bool sMayArm;
 static unsigned sTries;
 static bool sStopped;
+static uint32_t sBootS;
+static uint64_t sBootDeadline;
 
 static void
 wr(unsigned off, uint32_t v)
@@ -69,6 +74,19 @@ setOwner(Owner owner)
 static bool
 decide(void)
 {
+	if (sMap == NULL) {
+		sMap = sNub->mapDeviceMemoryWithIndex(0, kIOMapInhibitCache);
+		if (sMap == NULL || sMap->getLength() < PM_REGS_SIZE) {
+			IOLog("RPiWatchdog: cannot map the PM block; the kernel does not arm it\n");
+			OSSafeReleaseNULL(sMap);
+			return true;
+		}
+		os_atomic_store(&sRegs, (volatile uint32_t *)sMap->getVirtualAddress(), release);
+	}
+	/* One the boot loader armed, pieboot's fallback boot, must not run out while this waits. */
+	if (hardwareArmed()) {
+		setCount();
+	}
 	uint32_t revision = 0;
 	IOReturn ret = RPiFirmwareProperty(FW_GET_FIRMWARE_REVISION, &revision, sizeof(revision));
 	if (ret == kIOReturnNotFound && ++sTries < kFirmwareTries) {
@@ -79,13 +97,6 @@ decide(void)
 		    "resets at once when armed); the kernel does not arm it\n", revision);
 		return true;
 	}
-	sMap = sNub->mapDeviceMemoryWithIndex(0, kIOMapInhibitCache);
-	if (sMap == NULL || sMap->getLength() < PM_REGS_SIZE) {
-		IOLog("RPiWatchdog: cannot map the PM block; the kernel does not arm it\n");
-		OSSafeReleaseNULL(sMap);
-		return true;
-	}
-	os_atomic_store(&sRegs, (volatile uint32_t *)sMap->getVirtualAddress(), release);
 	uint32_t bootArg = 1;
 	PE_parse_boot_argn("pie_watchdog", &bootArg, sizeof(bootArg));
 	if (bootArg == 0) {
@@ -109,6 +120,9 @@ tick(thread_call_param_t, thread_call_param_t)
 		IOLockUnlock(sLock);
 		return;
 	}
+	if (sBootDeadline != 0 && sOwner != kOwnerKext && mach_absolute_time() >= sBootDeadline) {
+		panic("RPiWatchdog: no check-in from user space within %u s of boot (pie_watchdog_boot)", sBootS);
+	}
 	if (sOwner == kOwnerUndecided) {
 		if (!decide()) {
 			uint64_t deadline;
@@ -128,7 +142,8 @@ tick(thread_call_param_t, thread_call_param_t)
 	} else if (sOwner == kOwnerKernel && !os_atomic_load(&sStopped, relaxed)) {
 		setCount();
 	}
-	if (sOwner == kOwnerKernel && !os_atomic_load(&sStopped, relaxed)) {
+	if ((sOwner == kOwnerKernel || (sBootDeadline != 0 && sOwner == kOwnerNone)) &&
+	    !os_atomic_load(&sStopped, relaxed)) {
 		uint64_t deadline;
 		clock_interval_to_deadline(kPetMs, kMillisecondScale, &deadline);
 		thread_call_enter_delayed(sCall, deadline);
@@ -148,6 +163,37 @@ rpi_watchdog_early_start(IOService *nub)
 	if (sLock == NULL || sCall == NULL) {
 		IOLog("RPiWatchdog: no lock or thread call; the kernel does not arm it\n");
 		return;
+	}
+	char arg[128];
+	arg[0] = '\0';
+	if (PE_parse_boot_arg_str("pie_watchdog_boot", arg, sizeof(arg))) {
+		/* Digits only, saturating; anything else, or too long, gets the longest deadline. */
+		uint64_t bootS = 0;
+		bool digits = arg[0] != '\0' && strlen(arg) < sizeof(arg) - 1;
+		for (const char *c = arg; *c != '\0'; c++) {
+			if (*c < '0' || *c > '9') {
+				digits = false;
+				break;
+			}
+			bootS = bootS * 10 + (uint64_t)(*c - '0');
+			if (bootS > kBootMaxS) {
+				bootS = kBootMaxS;
+			}
+		}
+		if (!digits) {
+			IOLog("RPiWatchdog: pie_watchdog_boot=%s is not a number; %u s\n", arg, kBootMaxS);
+			bootS = kBootMaxS;
+		} else if (bootS != 0 && bootS < kBootMinS) {
+			/* A bare pie_watchdog_boot reads as 1. */
+			IOLog("RPiWatchdog: pie_watchdog_boot=%s is below %u; %u s\n", arg, kBootMinS, kBootMaxS);
+			bootS = kBootMaxS;
+		}
+		sBootS = (uint32_t)bootS;
+	}
+	if (sBootS != 0) {
+		/* From now, early in boot: after a reset the counter need not start at 0. */
+		clock_interval_to_deadline(sBootS, kSecondScale, &sBootDeadline);
+		IOLog("RPiWatchdog: pie_watchdog_boot: user space must check in within %u s of boot\n", sBootS);
 	}
 	thread_call_enter(sCall);
 }
@@ -192,6 +238,32 @@ pie_watchdog_takeover(void)
 	return had;
 }
 
+void
+pie_watchdog_boot_restore(uint64_t deadline, uint32_t seconds)
+{
+	if (sLock == NULL || sCall == NULL || deadline == 0) {
+		return;
+	}
+	IOLockLock(sLock);
+	sBootDeadline = deadline;
+	sBootS = seconds;
+	IOLockUnlock(sLock);
+}
+
+uint64_t
+pie_watchdog_boot_deadline(uint32_t *seconds)
+{
+	if (sLock == NULL) {
+		return 0;
+	}
+	IOLockLock(sLock);
+	uint64_t deadline = sBootDeadline;
+	*seconds = sBootS;
+	sBootDeadline = 0;
+	IOLockUnlock(sLock);
+	return deadline;
+}
+
 bool
 pie_watchdog_handback(bool armed)
 {
@@ -203,10 +275,12 @@ pie_watchdog_handback(bool armed)
 	setOwner(kernel ? kOwnerKernel : kOwnerNone);
 	if (kernel) {
 		setCount();
+		IOLog("RPiWatchdog: back with the kernel, %u s\n", kTimeoutS);
+	}
+	if (kernel || (sBootDeadline != 0 && !os_atomic_load(&sStopped, relaxed))) {
 		uint64_t deadline;
 		clock_interval_to_deadline(kPetMs, kMillisecondScale, &deadline);
 		thread_call_enter_delayed(sCall, deadline);
-		IOLog("RPiWatchdog: back with the kernel, %u s\n", kTimeoutS);
 	}
 	IOLockUnlock(sLock);
 	return kernel;

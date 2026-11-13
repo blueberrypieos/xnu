@@ -19,6 +19,12 @@
  * Whoever has it, a halt disarms it (a halted board must stay halted), and
  * a panic sets it to a full 15 s once, as the panic begins: a panic that
  * never reboots resets the board then.
+ *
+ * With the boot-arg pie_watchdog_boot=N, N seconds from 60 to 86400, the
+ * kernel panics unless user space checks in through IOWatchDogTimer
+ * within N seconds of boot, armed or not. The driver takes the deadline
+ * over as it starts, as a check-in due then. N=0 turns it off. Any
+ * other value outside 60 to 86400, or not a number, gives 86400.
  */
 
 #ifndef _PIE_WATCHDOG_H_
@@ -26,6 +32,7 @@
 
 #include <sys/cdefs.h>
 #include <stdbool.h>
+#include <stdint.h>
 
 __BEGIN_DECLS
 
@@ -43,6 +50,20 @@ bool pie_watchdog_takeover(void);
  * itself. Without armed, the kernel leaves it alone (false).
  */
 bool pie_watchdog_handback(bool armed);
+
+/*
+ * The boot deadline, in mach_absolute_time units, for the driver to take
+ * over. *seconds gets its length. It returns 0 if there is none. The
+ * kernel no longer checks it once this has returned it, so the driver
+ * keeps the same deadline.
+ */
+uint64_t pie_watchdog_boot_deadline(uint32_t *seconds);
+
+/*
+ * The driver gives back a boot deadline still due, before
+ * pie_watchdog_handback, as it stops. The kernel checks it again.
+ */
+void pie_watchdog_boot_restore(uint64_t deadline, uint32_t seconds);
 
 __END_DECLS
 
