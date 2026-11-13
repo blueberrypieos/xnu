@@ -1,3 +1,12 @@
+xnu (12377.121.6+pie3) blueberry-pie-os; urgency=medium
+
+  * pie_watchdog_boot=N in the boot-args: the kernel panics unless user
+    space checks in with the watchdog within N seconds of boot.
+  * A watchdog the boot loader armed is set again while the kernel waits
+    for the firmware.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Fri, 13 Nov 2026 00:27:59 +0000
+
 xnu (12377.121.6+pie2) blueberry-pie-os; urgency=medium
 
   * Kexts record their object paths relative to the source tree, so the

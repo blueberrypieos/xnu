@@ -44,6 +44,9 @@
  * check-ins as the kernel's reboot begins (kIOMessageSystemPagingOff),
  * before it kills what is left. init has sent every process SIGTERM before
  * that (SIGKILL 2 s later, then a sync): a daemon must set 0 on SIGTERM.
+ * With the boot-arg pie_watchdog_boot=N, the kernel's deadline of N s
+ * from boot becomes a check-in due when this starts: user space must set
+ * a number, or 0, by then.
  *
  * Registry property WatchdogState: armed, disarmed, qemu (not armed: QEMU),
  * expiring (hw.watchdog.test_expire). The hw.watchdog sysctls: enabled
@@ -63,6 +66,7 @@
 #include <IOKit/pwr_mgt/RootDomain.h>
 #include <IOKit/system_management/IOWatchDogTimer.h>
 #include <kern/clock.h>
+#include <kern/thread.h>
 #include <pexpert/pexpert.h>
 #include <sys/errno.h>
 #include <sys/proc.h>
@@ -117,8 +121,9 @@ private:
 	uint64_t fUserDeadline;
 	char fUserName[32];
 	bool fQEMU, fExpiring, fSysctls;
-	bool fOwnInstance, fGateAdded, fTimerAdded, fUserShutdown;
+	bool fOwnInstance, fGateAdded, fTimerAdded, fUserShutdown, fUserSet, fBootDue;
 	volatile bool fStopping;
+	thread_t volatile fInternal;
 
 	uint32_t rd(unsigned off) { return fRegs[off / 4]; }
 	void wr(unsigned off, uint32_t v) { fRegs[off / 4] = PM_PASSWORD | v; }
@@ -181,12 +186,20 @@ RPiWatchdog::start(IOService *provider)
 	fTimerAdded = true;
 	/* A halt must be able to disarm us before the superclass publishes. */
 	fHaltNotifier = registerPrioritySleepWakeInterest(haltRestart, this, NULL);
-	if (fHaltNotifier == NULL || !super::start(provider)) {
+	if (fHaltNotifier == NULL) {
+		return false;
+	}
+	fInternal = current_thread();
+	bool started = super::start(provider);
+	fInternal = NULL;
+	if (!started) {
 		return false;
 	}
 
 	/* Stop kernel pets only after our timer and required notifier are ready. */
 	bool kernelHad = pie_watchdog_takeover();
+	uint32_t bootS = 0;
+	uint64_t bootDeadline = pie_watchdog_boot_deadline(&bootS);
 	if (kernelHad) {
 		/* A later mailbox failure must not abandon the kernel's armed count. */
 		fQEMU = false;
@@ -213,6 +226,14 @@ RPiWatchdog::start(IOService *provider)
 			arm();
 			IOLog("RPiWatchdog: armed, %u s, set again every %u ms\n", fTimeoutS, kPetMs);
 		}
+		if (bootDeadline != 0 && !fUserSet && !fUserShutdown && !fStopping) {
+			fUserS = bootS;
+			fUserDeadline = bootDeadline;
+			fUserPid = 0;
+			fBootDue = true;
+			strlcpy(fUserName, "pie_watchdog_boot", sizeof(fUserName));
+			IOLog("RPiWatchdog: the boot deadline of %u s is now a check-in due\n", bootS);
+		}
 		updateState();
 		fTimer->setTimeoutMS(kPetMs);
 		return kIOReturnSuccess;
@@ -233,7 +254,13 @@ RPiWatchdog::stop(IOService *provider)
 	fTimer->cancelTimeout();
 	fGate->runActionBlock(^IOReturn {
 		fTimer->cancelTimeout();
-		if (fUserS != 0) {
+		if (fUserS != 0 && fBootDue && !fUserShutdown) {
+			/* No one checked in yet: the kernel keeps the boot deadline. */
+			pie_watchdog_boot_restore(fUserDeadline, fUserS);
+			IOLog("RPiWatchdog: unloaded; the boot deadline goes back to the kernel\n");
+			fUserS = 0;
+			fBootDue = false;
+		} else if (fUserS != 0) {
 			IOLog("RPiWatchdog: unloaded with check-ins due from pid %d (%s); they end\n", fUserPid, fUserName);
 			fUserS = 0;
 		}
@@ -247,7 +274,9 @@ RPiWatchdog::stop(IOService *provider)
 		return kIOReturnSuccess;
 	});
 	/* The check-ins off; IOWatchDogTimer's notifier removed. */
+	fInternal = current_thread();
 	super::stop(provider);
+	fInternal = NULL;
 	fWorkLoop->removeEventSource(fTimer);
 	fTimerAdded = false;
 	fWorkLoop->removeEventSource(fGate);
@@ -349,6 +378,13 @@ void
 RPiWatchdog::setWatchDogTimer(UInt32 timeOut)
 {
 	uint32_t s = timeOut > kMaxUserS ? kMaxUserS : (uint32_t)timeOut;
+	/*
+	 * IOWatchDogTimer's start, stop and sleep handler call this too. They
+	 * must not end the boot deadline: only user space can. The sleep
+	 * handler runs in the kernel, pid 0. start and stop may run on a user
+	 * thread, so their own thread's calls do not count as user calls.
+	 */
+	bool fromUser = proc_selfpid() != 0 && current_thread() != fInternal;
 	int pid = s != 0 ? proc_selfpid() : 0;
 	char buf[sizeof(fUserName)] = "";
 	if (s != 0) {
@@ -356,6 +392,15 @@ RPiWatchdog::setWatchDogTimer(UInt32 timeOut)
 	}
 	const char *name = buf;         /* blocks take no arrays */
 	fGate->runActionBlock(^IOReturn {
+		if (fromUser) {
+			/* Gated, as stop's restore: a check-in before the takeover ends the kernel's deadline too. */
+			uint32_t unused;
+			(void)pie_watchdog_boot_deadline(&unused);
+			fUserSet = true;
+			fBootDue = false;
+		} else if (fBootDue) {
+			return kIOReturnSuccess;
+		}
 		/* A queued daemon call must not recreate a deadline after PagingOff. */
 		if (s != 0 && (fUserShutdown || fStopping)) {
 			setProperty("IOWatchDogEnabled", kOSBooleanFalse);
