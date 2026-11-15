@@ -6,6 +6,7 @@
 # All rights reserved.  The CMU software License Agreement
 # specifies the terms and conditions for use and redistribution.
 # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
+# Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)).
 # This file contains Original Code and/or Modifications of Original Code
 # as defined in and that are subject to the Apple Public Source License
 # Version 2.0 (the 'License'). You may not use this file except in
@@ -27,7 +28,7 @@
 #  -------- ----- -- ---------------
 #
 #  ARM_EXTRAS_BASE = [ config_pmap_ppl ]
-#  KERNEL_BASE =    [ arm64 medium msgb_large config_requires_u32_munging config_delay_idle_sleep config_proc_udata_storage config_uexc config_darkboot nos_arm_asm nos_arm_pmap config_builtin_crypto config_builtin_amfi config_builtin_hfs config_builtin_pthread config_rpi config_kxld mockfs ARM_EXTRAS_BASE ]
+#  KERNEL_BASE =    [ arm64 medium msgb_large config_requires_u32_munging config_delay_idle_sleep config_proc_udata_storage config_uexc config_darkboot nos_arm_asm nos_arm_pmap config_builtin_crypto config_builtin_amfi config_builtin_hfs config_builtin_zfs config_builtin_pthread config_rpi config_kxld mockfs ARM_EXTRAS_BASE ]
 #  KERNEL_RELEASE = [ KERNEL_BASE release ]
 #  KERNEL_DEV =     [ KERNEL_BASE development mach_assert config_xnupost proc_ref_debug config_proc_resource_limits config_ext_paniclog ]
 #  KERNEL_DEBUG =   [ KERNEL_BASE debug mach_assert config_xnupost config_waitq_stats config_workloop_debug config_proc_resource_limits config_ext_paniclog ]

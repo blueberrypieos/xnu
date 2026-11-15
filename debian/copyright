@@ -11,6 +11,7 @@ Source: https://github.com/blueberrypieos/xnu
  https://github.com/apple-oss-distributions/libpthread (tag libpthread-539.100.4, src/libpthread/)
  https://github.com/llvm/llvm-project (tag llvmorg-21.1.8, src/llvm-project/)
  https://github.com/apple-oss-distributions/msdosfs (tag msdosfs-788.100.31, src/msdosfs/)
+ https://github.com/openzfsonosx/openzfs-fork (tag zfs-macOS-2.4.1p1, src/openzfs/)
  https://github.com/blueberrypieos/pieboot (tag 0.1.0, src/pieboot/)
  https://github.com/blueberrypieos/piecrypto (commit 6df3fe62c946fd0dbfa74fd105c854187cdcdab9, src/piecrypto/)
  https://github.com/freebsd/freebsd-src (commit 93c05b743ea865bb87653e9ee5fbaa837c00eee7, sys/dev/evdev, xnu-overlay/bsd/dev/evdev/)
@@ -2680,6 +2681,544 @@ Files-Included:
  src/msdosfs/msdosfs.kextproj/msdosfs.kmodproj/msdosfs_vnops.c
  src/msdosfs/msdosfs.kextproj/msdosfs.kmodproj/msdosfsmount.h
  src/msdosfs/msdosfs.xcconfig
+ src/openzfs/COPYRIGHT
+ src/openzfs/LICENSE
+ src/openzfs/META
+ src/openzfs/NOTICE
+ src/openzfs/include/cityhash.h
+ src/openzfs/include/os/macos/spl/IOKit/*
+ src/openzfs/include/os/macos/spl/libkern/*
+ src/openzfs/include/os/macos/spl/linux/*
+ src/openzfs/include/os/macos/spl/rpc/types.h
+ src/openzfs/include/os/macos/spl/rpc/xdr.h
+ src/openzfs/include/os/macos/spl/stddef.h
+ src/openzfs/include/os/macos/spl/string.h
+ src/openzfs/include/os/macos/spl/sys/aarch64/*
+ src/openzfs/include/os/macos/spl/sys/acl.h
+ src/openzfs/include/os/macos/spl/sys/atomic.h
+ src/openzfs/include/os/macos/spl/sys/byteorder.h
+ src/openzfs/include/os/macos/spl/sys/callb.h
+ src/openzfs/include/os/macos/spl/sys/cmn_err.h
+ src/openzfs/include/os/macos/spl/sys/condvar.h
+ src/openzfs/include/os/macos/spl/sys/cred.h
+ src/openzfs/include/os/macos/spl/sys/ctype.h
+ src/openzfs/include/os/macos/spl/sys/debug.h
+ src/openzfs/include/os/macos/spl/sys/disp.h
+ src/openzfs/include/os/macos/spl/sys/dkio.h
+ src/openzfs/include/os/macos/spl/sys/errno.h
+ src/openzfs/include/os/macos/spl/sys/fcntl.h
+ src/openzfs/include/os/macos/spl/sys/file.h
+ src/openzfs/include/os/macos/spl/sys/inttypes.h
+ src/openzfs/include/os/macos/spl/sys/isa_defs.h
+ src/openzfs/include/os/macos/spl/sys/kmem.h
+ src/openzfs/include/os/macos/spl/sys/kmem_cache.h
+ src/openzfs/include/os/macos/spl/sys/kmem_impl.h
+ src/openzfs/include/os/macos/spl/sys/kstat.h
+ src/openzfs/include/os/macos/spl/sys/list.h
+ src/openzfs/include/os/macos/spl/sys/misc.h
+ src/openzfs/include/os/macos/spl/sys/mod.h
+ src/openzfs/include/os/macos/spl/sys/mutex.h
+ src/openzfs/include/os/macos/spl/sys/param.h
+ src/openzfs/include/os/macos/spl/sys/policy.h
+ src/openzfs/include/os/macos/spl/sys/priv.h
+ src/openzfs/include/os/macos/spl/sys/proc.h
+ src/openzfs/include/os/macos/spl/sys/processor.h
+ src/openzfs/include/os/macos/spl/sys/procfs_list.h
+ src/openzfs/include/os/macos/spl/sys/random.h
+ src/openzfs/include/os/macos/spl/sys/rwlock.h
+ src/openzfs/include/os/macos/spl/sys/seg_kmem.h
+ src/openzfs/include/os/macos/spl/sys/sid.h
+ src/openzfs/include/os/macos/spl/sys/signal.h
+ src/openzfs/include/os/macos/spl/sys/simd.h
+ src/openzfs/include/os/macos/spl/sys/simd_aarch64.h
+ src/openzfs/include/os/macos/spl/sys/string.h
+ src/openzfs/include/os/macos/spl/sys/stropts.h
+ src/openzfs/include/os/macos/spl/sys/sunddi.h
+ src/openzfs/include/os/macos/spl/sys/sysmacros.h
+ src/openzfs/include/os/macos/spl/sys/systeminfo.h
+ src/openzfs/include/os/macos/spl/sys/systm.h
+ src/openzfs/include/os/macos/spl/sys/taskq.h
+ src/openzfs/include/os/macos/spl/sys/taskq_impl.h
+ src/openzfs/include/os/macos/spl/sys/thread.h
+ src/openzfs/include/os/macos/spl/sys/time.h
+ src/openzfs/include/os/macos/spl/sys/timer.h
+ src/openzfs/include/os/macos/spl/sys/trace.h
+ src/openzfs/include/os/macos/spl/sys/tsd.h
+ src/openzfs/include/os/macos/spl/sys/types.h
+ src/openzfs/include/os/macos/spl/sys/types32.h
+ src/openzfs/include/os/macos/spl/sys/uio.h
+ src/openzfs/include/os/macos/spl/sys/utsname.h
+ src/openzfs/include/os/macos/spl/sys/varargs.h
+ src/openzfs/include/os/macos/spl/sys/vfs.h
+ src/openzfs/include/os/macos/spl/sys/vmem.h
+ src/openzfs/include/os/macos/spl/sys/vmem_impl.h
+ src/openzfs/include/os/macos/spl/sys/vmsystm.h
+ src/openzfs/include/os/macos/spl/sys/vnode.h
+ src/openzfs/include/os/macos/spl/sys/wmsum.h
+ src/openzfs/include/os/macos/spl/sys/zmod.h
+ src/openzfs/include/os/macos/spl/sys/zone.h
+ src/openzfs/include/os/macos/zfs/sys/ZFSDataset.h
+ src/openzfs/include/os/macos/zfs/sys/ZFSDatasetProxy.h
+ src/openzfs/include/os/macos/zfs/sys/ZFSDatasetScheme.h
+ src/openzfs/include/os/macos/zfs/sys/ZFSPool.h
+ src/openzfs/include/os/macos/zfs/sys/abd_impl_os.h
+ src/openzfs/include/os/macos/zfs/sys/abd_os.h
+ src/openzfs/include/os/macos/zfs/sys/finderinfo.h
+ src/openzfs/include/os/macos/zfs/sys/hfs_internal.h
+ src/openzfs/include/os/macos/zfs/sys/ldi_buf.h
+ src/openzfs/include/os/macos/zfs/sys/ldi_impl_osx.h
+ src/openzfs/include/os/macos/zfs/sys/ldi_osx.h
+ src/openzfs/include/os/macos/zfs/sys/trace_zfs.h
+ src/openzfs/include/os/macos/zfs/sys/vdev_disk_os.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_boot.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_bootenv_os.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_context_os.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_ctldir.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_debug_os.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_dir.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_ioctl_compat.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_mount.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_vfsops_os.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_vnops_os.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_znode_impl.h
+ src/openzfs/include/os/macos/zfs/sys/zpl.h
+ src/openzfs/include/os/macos/zfs/sys/zvolIO.h
+ src/openzfs/include/os/macos/zfs/sys/zvol_os.h
+ src/openzfs/include/sys/abd.h
+ src/openzfs/include/sys/abd_impl.h
+ src/openzfs/include/sys/aggsum.h
+ src/openzfs/include/sys/arc.h
+ src/openzfs/include/sys/arc_impl.h
+ src/openzfs/include/sys/asm_linkage.h
+ src/openzfs/include/sys/avl.h
+ src/openzfs/include/sys/avl_impl.h
+ src/openzfs/include/sys/bitmap.h
+ src/openzfs/include/sys/bitops.h
+ src/openzfs/include/sys/blake3.h
+ src/openzfs/include/sys/blkptr.h
+ src/openzfs/include/sys/bplist.h
+ src/openzfs/include/sys/bpobj.h
+ src/openzfs/include/sys/bptree.h
+ src/openzfs/include/sys/bqueue.h
+ src/openzfs/include/sys/brt.h
+ src/openzfs/include/sys/brt_impl.h
+ src/openzfs/include/sys/btree.h
+ src/openzfs/include/sys/crypto/*
+ src/openzfs/include/sys/dataset_kstats.h
+ src/openzfs/include/sys/dbuf.h
+ src/openzfs/include/sys/ddt.h
+ src/openzfs/include/sys/ddt_impl.h
+ src/openzfs/include/sys/dmu.h
+ src/openzfs/include/sys/dmu_impl.h
+ src/openzfs/include/sys/dmu_objset.h
+ src/openzfs/include/sys/dmu_recv.h
+ src/openzfs/include/sys/dmu_redact.h
+ src/openzfs/include/sys/dmu_send.h
+ src/openzfs/include/sys/dmu_traverse.h
+ src/openzfs/include/sys/dmu_tx.h
+ src/openzfs/include/sys/dmu_zfetch.h
+ src/openzfs/include/sys/dnode.h
+ src/openzfs/include/sys/dsl_bookmark.h
+ src/openzfs/include/sys/dsl_crypt.h
+ src/openzfs/include/sys/dsl_dataset.h
+ src/openzfs/include/sys/dsl_deadlist.h
+ src/openzfs/include/sys/dsl_deleg.h
+ src/openzfs/include/sys/dsl_destroy.h
+ src/openzfs/include/sys/dsl_dir.h
+ src/openzfs/include/sys/dsl_pool.h
+ src/openzfs/include/sys/dsl_prop.h
+ src/openzfs/include/sys/dsl_scan.h
+ src/openzfs/include/sys/dsl_synctask.h
+ src/openzfs/include/sys/dsl_userhold.h
+ src/openzfs/include/sys/edonr.h
+ src/openzfs/include/sys/fm/*
+ src/openzfs/include/sys/fs/*
+ src/openzfs/include/sys/hkdf.h
+ src/openzfs/include/sys/lua/*
+ src/openzfs/include/sys/metaslab.h
+ src/openzfs/include/sys/metaslab_impl.h
+ src/openzfs/include/sys/mmp.h
+ src/openzfs/include/sys/mntent.h
+ src/openzfs/include/sys/multilist.h
+ src/openzfs/include/sys/nvpair.h
+ src/openzfs/include/sys/nvpair_impl.h
+ src/openzfs/include/sys/objlist.h
+ src/openzfs/include/sys/pathname.h
+ src/openzfs/include/sys/qat.h
+ src/openzfs/include/sys/range_tree.h
+ src/openzfs/include/sys/rrwlock.h
+ src/openzfs/include/sys/sa.h
+ src/openzfs/include/sys/sa_impl.h
+ src/openzfs/include/sys/sha2.h
+ src/openzfs/include/sys/skein.h
+ src/openzfs/include/sys/spa.h
+ src/openzfs/include/sys/spa_checkpoint.h
+ src/openzfs/include/sys/spa_checksum.h
+ src/openzfs/include/sys/spa_impl.h
+ src/openzfs/include/sys/spa_log_spacemap.h
+ src/openzfs/include/sys/space_map.h
+ src/openzfs/include/sys/space_reftree.h
+ src/openzfs/include/sys/sysevent/eventdefs.h
+ src/openzfs/include/sys/sysevent.h
+ src/openzfs/include/sys/txg.h
+ src/openzfs/include/sys/txg_impl.h
+ src/openzfs/include/sys/u8_textprep.h
+ src/openzfs/include/sys/u8_textprep_data.h
+ src/openzfs/include/sys/uberblock.h
+ src/openzfs/include/sys/uberblock_impl.h
+ src/openzfs/include/sys/uio_impl.h
+ src/openzfs/include/sys/unique.h
+ src/openzfs/include/sys/uuid.h
+ src/openzfs/include/sys/vdev.h
+ src/openzfs/include/sys/vdev_disk.h
+ src/openzfs/include/sys/vdev_draid.h
+ src/openzfs/include/sys/vdev_file.h
+ src/openzfs/include/sys/vdev_impl.h
+ src/openzfs/include/sys/vdev_indirect_births.h
+ src/openzfs/include/sys/vdev_indirect_mapping.h
+ src/openzfs/include/sys/vdev_initialize.h
+ src/openzfs/include/sys/vdev_raidz.h
+ src/openzfs/include/sys/vdev_raidz_impl.h
+ src/openzfs/include/sys/vdev_rebuild.h
+ src/openzfs/include/sys/vdev_removal.h
+ src/openzfs/include/sys/vdev_trim.h
+ src/openzfs/include/sys/xvattr.h
+ src/openzfs/include/sys/zap.h
+ src/openzfs/include/sys/zap_impl.h
+ src/openzfs/include/sys/zap_leaf.h
+ src/openzfs/include/sys/zcp.h
+ src/openzfs/include/sys/zcp_global.h
+ src/openzfs/include/sys/zcp_iter.h
+ src/openzfs/include/sys/zcp_prop.h
+ src/openzfs/include/sys/zcp_set.h
+ src/openzfs/include/sys/zfeature.h
+ src/openzfs/include/sys/zfs_acl.h
+ src/openzfs/include/sys/zfs_bootenv.h
+ src/openzfs/include/sys/zfs_chksum.h
+ src/openzfs/include/sys/zfs_context.h
+ src/openzfs/include/sys/zfs_debug.h
+ src/openzfs/include/sys/zfs_delay.h
+ src/openzfs/include/sys/zfs_file.h
+ src/openzfs/include/sys/zfs_fuid.h
+ src/openzfs/include/sys/zfs_impl.h
+ src/openzfs/include/sys/zfs_ioctl.h
+ src/openzfs/include/sys/zfs_ioctl_impl.h
+ src/openzfs/include/sys/zfs_onexit.h
+ src/openzfs/include/sys/zfs_project.h
+ src/openzfs/include/sys/zfs_quota.h
+ src/openzfs/include/sys/zfs_racct.h
+ src/openzfs/include/sys/zfs_ratelimit.h
+ src/openzfs/include/sys/zfs_refcount.h
+ src/openzfs/include/sys/zfs_rlock.h
+ src/openzfs/include/sys/zfs_sa.h
+ src/openzfs/include/sys/zfs_stat.h
+ src/openzfs/include/sys/zfs_sysfs.h
+ src/openzfs/include/sys/zfs_vfsops.h
+ src/openzfs/include/sys/zfs_vnops.h
+ src/openzfs/include/sys/zfs_znode.h
+ src/openzfs/include/sys/zil.h
+ src/openzfs/include/sys/zil_impl.h
+ src/openzfs/include/sys/zio.h
+ src/openzfs/include/sys/zio_checksum.h
+ src/openzfs/include/sys/zio_compress.h
+ src/openzfs/include/sys/zio_crypt.h
+ src/openzfs/include/sys/zio_impl.h
+ src/openzfs/include/sys/zrlock.h
+ src/openzfs/include/sys/zstd/*
+ src/openzfs/include/sys/zthr.h
+ src/openzfs/include/sys/zvol.h
+ src/openzfs/include/sys/zvol_impl.h
+ src/openzfs/include/zfeature_common.h
+ src/openzfs/include/zfs_comutil.h
+ src/openzfs/include/zfs_crrd.h
+ src/openzfs/include/zfs_deleg.h
+ src/openzfs/include/zfs_fletcher.h
+ src/openzfs/include/zfs_namecheck.h
+ src/openzfs/include/zfs_prop.h
+ src/openzfs/module/avl/*
+ src/openzfs/module/icp/algs/aes/*
+ src/openzfs/module/icp/algs/blake3/*
+ src/openzfs/module/icp/algs/edonr/*
+ src/openzfs/module/icp/algs/modes/ccm.c
+ src/openzfs/module/icp/algs/modes/gcm.c
+ src/openzfs/module/icp/algs/modes/gcm_generic.c
+ src/openzfs/module/icp/algs/modes/modes.c
+ src/openzfs/module/icp/algs/sha2/*
+ src/openzfs/module/icp/algs/skein/skein.c
+ src/openzfs/module/icp/algs/skein/skein_block.c
+ src/openzfs/module/icp/algs/skein/skein_impl.h
+ src/openzfs/module/icp/algs/skein/skein_iv.c
+ src/openzfs/module/icp/algs/skein/skein_port.h
+ src/openzfs/module/icp/api/*
+ src/openzfs/module/icp/asm-aarch64/aes/*
+ src/openzfs/module/icp/asm-aarch64/sha2/*
+ src/openzfs/module/icp/core/*
+ src/openzfs/module/icp/illumos-crypto.c
+ src/openzfs/module/icp/include/*
+ src/openzfs/module/icp/io/*
+ src/openzfs/module/icp/spi/*
+ src/openzfs/module/lua/lapi.c
+ src/openzfs/module/lua/lapi.h
+ src/openzfs/module/lua/lauxlib.c
+ src/openzfs/module/lua/lbaselib.c
+ src/openzfs/module/lua/lcode.c
+ src/openzfs/module/lua/lcode.h
+ src/openzfs/module/lua/lcompat.c
+ src/openzfs/module/lua/lcorolib.c
+ src/openzfs/module/lua/lctype.c
+ src/openzfs/module/lua/lctype.h
+ src/openzfs/module/lua/ldebug.c
+ src/openzfs/module/lua/ldebug.h
+ src/openzfs/module/lua/ldo.c
+ src/openzfs/module/lua/ldo.h
+ src/openzfs/module/lua/lfunc.c
+ src/openzfs/module/lua/lfunc.h
+ src/openzfs/module/lua/lgc.c
+ src/openzfs/module/lua/lgc.h
+ src/openzfs/module/lua/llex.c
+ src/openzfs/module/lua/llex.h
+ src/openzfs/module/lua/llimits.h
+ src/openzfs/module/lua/lmem.c
+ src/openzfs/module/lua/lmem.h
+ src/openzfs/module/lua/lobject.c
+ src/openzfs/module/lua/lobject.h
+ src/openzfs/module/lua/lopcodes.c
+ src/openzfs/module/lua/lopcodes.h
+ src/openzfs/module/lua/lparser.c
+ src/openzfs/module/lua/lparser.h
+ src/openzfs/module/lua/lstate.c
+ src/openzfs/module/lua/lstate.h
+ src/openzfs/module/lua/lstring.c
+ src/openzfs/module/lua/lstring.h
+ src/openzfs/module/lua/lstrlib.c
+ src/openzfs/module/lua/ltable.c
+ src/openzfs/module/lua/ltable.h
+ src/openzfs/module/lua/ltablib.c
+ src/openzfs/module/lua/ltm.c
+ src/openzfs/module/lua/ltm.h
+ src/openzfs/module/lua/lvm.c
+ src/openzfs/module/lua/lvm.h
+ src/openzfs/module/lua/lzio.c
+ src/openzfs/module/lua/lzio.h
+ src/openzfs/module/lua/setjmp/setjmp.S
+ src/openzfs/module/lua/setjmp/setjmp_aarch64.S
+ src/openzfs/module/nvpair/*
+ src/openzfs/module/os/macos/Makefile.am
+ src/openzfs/module/os/macos/spl/spl-atomic.c
+ src/openzfs/module/os/macos/spl/spl-condvar.c
+ src/openzfs/module/os/macos/spl/spl-cred.c
+ src/openzfs/module/os/macos/spl/spl-ddi.c
+ src/openzfs/module/os/macos/spl/spl-debug.c
+ src/openzfs/module/os/macos/spl/spl-err.c
+ src/openzfs/module/os/macos/spl/spl-kmem.c
+ src/openzfs/module/os/macos/spl/spl-kstat.c
+ src/openzfs/module/os/macos/spl/spl-list.c
+ src/openzfs/module/os/macos/spl/spl-mutex.c
+ src/openzfs/module/os/macos/spl/spl-osx.c
+ src/openzfs/module/os/macos/spl/spl-policy.c
+ src/openzfs/module/os/macos/spl/spl-proc.c
+ src/openzfs/module/os/macos/spl/spl-proc_list.c
+ src/openzfs/module/os/macos/spl/spl-processor.c
+ src/openzfs/module/os/macos/spl/spl-qsort.c
+ src/openzfs/module/os/macos/spl/spl-rwlock.c
+ src/openzfs/module/os/macos/spl/spl-seg_kmem.c
+ src/openzfs/module/os/macos/spl/spl-taskq.c
+ src/openzfs/module/os/macos/spl/spl-thread.c
+ src/openzfs/module/os/macos/spl/spl-time.c
+ src/openzfs/module/os/macos/spl/spl-tsd.c
+ src/openzfs/module/os/macos/spl/spl-uio.c
+ src/openzfs/module/os/macos/spl/spl-vmem.c
+ src/openzfs/module/os/macos/spl/spl-vnode.c
+ src/openzfs/module/os/macos/spl/spl-xdr.c
+ src/openzfs/module/os/macos/zfs/ZFSDataset.cpp
+ src/openzfs/module/os/macos/zfs/ZFSDatasetProxy.cpp
+ src/openzfs/module/os/macos/zfs/ZFSDatasetScheme.cpp
+ src/openzfs/module/os/macos/zfs/ZFSPool.cpp
+ src/openzfs/module/os/macos/zfs/abd_os.c
+ src/openzfs/module/os/macos/zfs/arc_os.c
+ src/openzfs/module/os/macos/zfs/ldi_iokit.cpp
+ src/openzfs/module/os/macos/zfs/ldi_osx.c
+ src/openzfs/module/os/macos/zfs/ldi_vnode.c
+ src/openzfs/module/os/macos/zfs/spa_misc_os.c
+ src/openzfs/module/os/macos/zfs/sysctl_os.c
+ src/openzfs/module/os/macos/zfs/vdev_disk.c
+ src/openzfs/module/os/macos/zfs/vdev_file_os.c
+ src/openzfs/module/os/macos/zfs/vdev_label_os.c
+ src/openzfs/module/os/macos/zfs/zfs_acl.c
+ src/openzfs/module/os/macos/zfs/zfs_boot.cpp
+ src/openzfs/module/os/macos/zfs/zfs_ctldir.c
+ src/openzfs/module/os/macos/zfs/zfs_debug.c
+ src/openzfs/module/os/macos/zfs/zfs_dir.c
+ src/openzfs/module/os/macos/zfs/zfs_file_os.c
+ src/openzfs/module/os/macos/zfs/zfs_fuid_os.c
+ src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
+ src/openzfs/module/os/macos/zfs/zfs_osx.cpp
+ src/openzfs/module/os/macos/zfs/zfs_racct.c
+ src/openzfs/module/os/macos/zfs/zfs_vfsops.c
+ src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
+ src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
+ src/openzfs/module/os/macos/zfs/zfs_vnops_osx_lib.c
+ src/openzfs/module/os/macos/zfs/zfs_vnops_osx_xattr.c
+ src/openzfs/module/os/macos/zfs/zfs_znode_os.c
+ src/openzfs/module/os/macos/zfs/zio_crypt.c
+ src/openzfs/module/os/macos/zfs/zvolIO.cpp
+ src/openzfs/module/os/macos/zfs/zvol_os.c
+ src/openzfs/module/zcommon/cityhash.c
+ src/openzfs/module/zcommon/zfeature_common.c
+ src/openzfs/module/zcommon/zfs_comutil.c
+ src/openzfs/module/zcommon/zfs_deleg.c
+ src/openzfs/module/zcommon/zfs_fletcher.c
+ src/openzfs/module/zcommon/zfs_fletcher_superscalar.c
+ src/openzfs/module/zcommon/zfs_fletcher_superscalar4.c
+ src/openzfs/module/zcommon/zfs_namecheck.c
+ src/openzfs/module/zcommon/zfs_prop.c
+ src/openzfs/module/zcommon/zpool_prop.c
+ src/openzfs/module/zcommon/zprop_common.c
+ src/openzfs/module/zfs/abd.c
+ src/openzfs/module/zfs/aggsum.c
+ src/openzfs/module/zfs/arc.c
+ src/openzfs/module/zfs/blake3_zfs.c
+ src/openzfs/module/zfs/blkptr.c
+ src/openzfs/module/zfs/bplist.c
+ src/openzfs/module/zfs/bpobj.c
+ src/openzfs/module/zfs/bptree.c
+ src/openzfs/module/zfs/bqueue.c
+ src/openzfs/module/zfs/brt.c
+ src/openzfs/module/zfs/btree.c
+ src/openzfs/module/zfs/dataset_kstats.c
+ src/openzfs/module/zfs/dbuf.c
+ src/openzfs/module/zfs/dbuf_stats.c
+ src/openzfs/module/zfs/ddt.c
+ src/openzfs/module/zfs/ddt_log.c
+ src/openzfs/module/zfs/ddt_stats.c
+ src/openzfs/module/zfs/ddt_zap.c
+ src/openzfs/module/zfs/dmu.c
+ src/openzfs/module/zfs/dmu_diff.c
+ src/openzfs/module/zfs/dmu_direct.c
+ src/openzfs/module/zfs/dmu_object.c
+ src/openzfs/module/zfs/dmu_objset.c
+ src/openzfs/module/zfs/dmu_recv.c
+ src/openzfs/module/zfs/dmu_redact.c
+ src/openzfs/module/zfs/dmu_send.c
+ src/openzfs/module/zfs/dmu_traverse.c
+ src/openzfs/module/zfs/dmu_tx.c
+ src/openzfs/module/zfs/dmu_zfetch.c
+ src/openzfs/module/zfs/dnode.c
+ src/openzfs/module/zfs/dnode_sync.c
+ src/openzfs/module/zfs/dsl_bookmark.c
+ src/openzfs/module/zfs/dsl_crypt.c
+ src/openzfs/module/zfs/dsl_dataset.c
+ src/openzfs/module/zfs/dsl_deadlist.c
+ src/openzfs/module/zfs/dsl_deleg.c
+ src/openzfs/module/zfs/dsl_destroy.c
+ src/openzfs/module/zfs/dsl_dir.c
+ src/openzfs/module/zfs/dsl_pool.c
+ src/openzfs/module/zfs/dsl_prop.c
+ src/openzfs/module/zfs/dsl_scan.c
+ src/openzfs/module/zfs/dsl_synctask.c
+ src/openzfs/module/zfs/dsl_userhold.c
+ src/openzfs/module/zfs/edonr_zfs.c
+ src/openzfs/module/zfs/fm.c
+ src/openzfs/module/zfs/gzip.c
+ src/openzfs/module/zfs/hkdf.c
+ src/openzfs/module/zfs/lz4.c
+ src/openzfs/module/zfs/lz4_zfs.c
+ src/openzfs/module/zfs/lzjb.c
+ src/openzfs/module/zfs/metaslab.c
+ src/openzfs/module/zfs/mmp.c
+ src/openzfs/module/zfs/multilist.c
+ src/openzfs/module/zfs/objlist.c
+ src/openzfs/module/zfs/pathname.c
+ src/openzfs/module/zfs/range_tree.c
+ src/openzfs/module/zfs/refcount.c
+ src/openzfs/module/zfs/rrwlock.c
+ src/openzfs/module/zfs/sa.c
+ src/openzfs/module/zfs/sha2_zfs.c
+ src/openzfs/module/zfs/skein_zfs.c
+ src/openzfs/module/zfs/spa.c
+ src/openzfs/module/zfs/spa_checkpoint.c
+ src/openzfs/module/zfs/spa_config.c
+ src/openzfs/module/zfs/spa_errlog.c
+ src/openzfs/module/zfs/spa_history.c
+ src/openzfs/module/zfs/spa_log_spacemap.c
+ src/openzfs/module/zfs/spa_misc.c
+ src/openzfs/module/zfs/spa_stats.c
+ src/openzfs/module/zfs/space_map.c
+ src/openzfs/module/zfs/space_reftree.c
+ src/openzfs/module/zfs/txg.c
+ src/openzfs/module/zfs/u8_textprep.c
+ src/openzfs/module/zfs/uberblock.c
+ src/openzfs/module/zfs/unique.c
+ src/openzfs/module/zfs/vdev.c
+ src/openzfs/module/zfs/vdev_draid.c
+ src/openzfs/module/zfs/vdev_draid_rand.c
+ src/openzfs/module/zfs/vdev_file.c
+ src/openzfs/module/zfs/vdev_indirect.c
+ src/openzfs/module/zfs/vdev_indirect_births.c
+ src/openzfs/module/zfs/vdev_indirect_mapping.c
+ src/openzfs/module/zfs/vdev_initialize.c
+ src/openzfs/module/zfs/vdev_label.c
+ src/openzfs/module/zfs/vdev_mirror.c
+ src/openzfs/module/zfs/vdev_missing.c
+ src/openzfs/module/zfs/vdev_queue.c
+ src/openzfs/module/zfs/vdev_raidz.c
+ src/openzfs/module/zfs/vdev_raidz_math.c
+ src/openzfs/module/zfs/vdev_raidz_math_impl.h
+ src/openzfs/module/zfs/vdev_raidz_math_scalar.c
+ src/openzfs/module/zfs/vdev_rebuild.c
+ src/openzfs/module/zfs/vdev_removal.c
+ src/openzfs/module/zfs/vdev_root.c
+ src/openzfs/module/zfs/vdev_trim.c
+ src/openzfs/module/zfs/zap.c
+ src/openzfs/module/zfs/zap_leaf.c
+ src/openzfs/module/zfs/zap_micro.c
+ src/openzfs/module/zfs/zcp.c
+ src/openzfs/module/zfs/zcp_get.c
+ src/openzfs/module/zfs/zcp_global.c
+ src/openzfs/module/zfs/zcp_iter.c
+ src/openzfs/module/zfs/zcp_set.c
+ src/openzfs/module/zfs/zcp_synctask.c
+ src/openzfs/module/zfs/zfeature.c
+ src/openzfs/module/zfs/zfs_byteswap.c
+ src/openzfs/module/zfs/zfs_chksum.c
+ src/openzfs/module/zfs/zfs_crrd.c
+ src/openzfs/module/zfs/zfs_fm.c
+ src/openzfs/module/zfs/zfs_fuid.c
+ src/openzfs/module/zfs/zfs_impl.c
+ src/openzfs/module/zfs/zfs_ioctl.c
+ src/openzfs/module/zfs/zfs_log.c
+ src/openzfs/module/zfs/zfs_onexit.c
+ src/openzfs/module/zfs/zfs_quota.c
+ src/openzfs/module/zfs/zfs_ratelimit.c
+ src/openzfs/module/zfs/zfs_replay.c
+ src/openzfs/module/zfs/zfs_rlock.c
+ src/openzfs/module/zfs/zfs_sa.c
+ src/openzfs/module/zfs/zfs_vnops.c
+ src/openzfs/module/zfs/zfs_znode.c
+ src/openzfs/module/zfs/zil.c
+ src/openzfs/module/zfs/zio.c
+ src/openzfs/module/zfs/zio_checksum.c
+ src/openzfs/module/zfs/zio_compress.c
+ src/openzfs/module/zfs/zio_inject.c
+ src/openzfs/module/zfs/zle.c
+ src/openzfs/module/zfs/zrlock.c
+ src/openzfs/module/zfs/zthr.c
+ src/openzfs/module/zfs/zvol.c
+ src/openzfs/module/zstd/include/limits.h
+ src/openzfs/module/zstd/include/stdlib.h
+ src/openzfs/module/zstd/include/zstd_compat_wrapper.h
+ src/openzfs/module/zstd/lib/common/*
+ src/openzfs/module/zstd/lib/compress/*
+ src/openzfs/module/zstd/lib/decompress/huf_decompress.c
+ src/openzfs/module/zstd/lib/decompress/zstd_ddict.c
+ src/openzfs/module/zstd/lib/decompress/zstd_ddict.h
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress.c
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress_block.c
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress_block.h
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress_internal.h
+ src/openzfs/module/zstd/lib/zstd.h
+ src/openzfs/module/zstd/lib/zstd_errors.h
+ src/openzfs/module/zstd/zfs_zstd.c
  src/pieboot/LICENSE
  src/pieboot/mkbundle.py
  src/piecrypto/LICENSE
@@ -4335,6 +4874,2403 @@ Files: src/libdispatch/*
 Copyright: 2015 Apple Inc.
 License: Apache-2.0
 
+Files: src/openzfs/COPYRIGHT
+Copyright: 2008, 2010, 2017-2018 Brian Behlendorf
+ 2013 Ned Bass
+ 2015 Chris Dunlap
+ 2017 Tom Caputi
+ 2019 Matthew Macy
+ 2020 Andrea Gelmini
+ 2020 Attila Fülöp
+License: CDDL-1.0
+
+Files: src/openzfs/LICENSE
+Copyright: 2008, 2018 Brian Behlendorf
+License: CDDL-1.0
+
+Files: src/openzfs/META
+Copyright: 2008-2025 Brian Behlendorf
+ 2018 Antonio Russo
+ 2020 Kjeld Schouten-Lebbing
+ 2023-2025 Tony Hutter
+ 2024 Rob Norris
+ 2025-2026 Joergen Lundman
+ 2025 Achill Gilgenast
+License: CDDL-1.0
+
+Files: src/openzfs/NOTICE
+Copyright: 2018 Brian Behlendorf
+License: CDDL-1.0
+
+Files: src/openzfs/include/cityhash.h
+ src/openzfs/module/zcommon/cityhash.c
+Copyright: 2011 Google, Inc
+ 2017 Delphix
+License: MIT
+
+Files: src/openzfs/include/os/macos/spl/IOKit/IOLib.h
+Copyright: 2023 Sean Doran <smd@use.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/libkern/libkern.h
+ src/openzfs/include/os/macos/spl/sys/signal.h
+Copyright: 2020 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/linux/init.h
+ src/openzfs/include/os/macos/spl/linux/kernel.h
+ src/openzfs/include/os/macos/spl/sys/disp.h
+ src/openzfs/include/os/macos/spl/sys/kmem_cache.h
+ src/openzfs/include/os/macos/spl/sys/trace.h
+Copyright: 2008, 2010 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2015 Jerry Jelinek
+ 2019 Matthew Macy
+ 2021 Ahelenia Ziemiańska
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/linux/module.h
+Copyright: 2008, 2010 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2015 Jerry Jelinek
+ 2019 Matthew Macy
+ 2021 Kevin Bowling
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+ 2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/rpc/types.h
+ src/openzfs/include/os/macos/spl/sys/byteorder.h
+ src/openzfs/include/os/macos/spl/sys/cred.h
+ src/openzfs/include/os/macos/spl/sys/fcntl.h
+ src/openzfs/include/os/macos/spl/sys/file.h
+ src/openzfs/include/os/macos/spl/sys/inttypes.h
+ src/openzfs/include/os/macos/spl/sys/param.h
+ src/openzfs/include/os/macos/spl/sys/processor.h
+ src/openzfs/include/os/macos/spl/sys/random.h
+ src/openzfs/include/os/macos/spl/sys/stropts.h
+ src/openzfs/include/os/macos/spl/sys/sysmacros.h
+ src/openzfs/include/os/macos/spl/sys/systeminfo.h
+ src/openzfs/include/os/macos/spl/sys/systm.h
+ src/openzfs/include/os/macos/spl/sys/varargs.h
+ src/openzfs/include/os/macos/spl/sys/vmsystm.h
+ src/openzfs/include/os/macos/spl/sys/zone.h
+ src/openzfs/module/os/macos/spl/spl-atomic.c
+ src/openzfs/module/os/macos/spl/spl-processor.c
+Copyright: 2013 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/rpc/xdr.h
+Copyright: 1989, 2011 Oracle and/or its affiliates
+ 1983, 1984, 1985, 1986, 1987, 1988, 1989 AT&T
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/stddef.h
+Copyright: 2021 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/string.h
+ src/openzfs/include/os/macos/spl/sys/ctype.h
+Copyright: 2008, 2010 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2015 Jerry Jelinek
+ 2019 Matthew Macy
+ 2021 Kevin Bowling
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/aarch64/asm_linkage.h
+ src/openzfs/include/os/macos/spl/sys/condvar.h
+ src/openzfs/include/os/macos/spl/sys/mutex.h
+ src/openzfs/include/os/macos/zfs/sys/finderinfo.h
+ src/openzfs/include/os/macos/zfs/sys/hfs_internal.h
+ src/openzfs/include/os/macos/zfs/sys/trace_zfs.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_mount.h
+ src/openzfs/include/os/macos/zfs/sys/zvol_os.h
+ src/openzfs/module/os/macos/spl/spl-ddi.c
+ src/openzfs/module/os/macos/spl/spl-debug.c
+ src/openzfs/module/os/macos/spl/spl-policy.c
+Copyright: 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/acl.h
+ src/openzfs/include/os/macos/spl/sys/callb.h
+ src/openzfs/include/os/macos/spl/sys/seg_kmem.h
+ src/openzfs/include/sys/spa_checksum.h
+ src/openzfs/module/icp/algs/aes/aes_modes.c
+ src/openzfs/module/icp/algs/modes/modes.c
+ src/openzfs/module/icp/core/kcf_prov_lib.c
+ src/openzfs/module/icp/include/aes/aes_impl.h
+ src/openzfs/module/icp/include/modes/modes.h
+ src/openzfs/module/icp/include/sys/crypto/impl.h
+ src/openzfs/module/zfs/zle.c
+Copyright: 2009 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/atomic.h
+Copyright: 2023, 2026 Jorgen Lundman
+ 2024 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/cmn_err.h
+Copyright: 1984, 1986, 1987, 1988, 1989 AT&T
+ 2004 Sun Microsystems, Inc
+ 2012 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/debug.h
+ src/openzfs/include/os/macos/spl/sys/simd.h
+ src/openzfs/module/os/macos/zfs/sysctl_os.c
+Copyright: 2020 iXsystems, Inc
+License: BSD-2-Clause
+
+Files: src/openzfs/include/os/macos/spl/sys/dkio.h
+ src/openzfs/include/os/macos/spl/sys/kstat.h
+ src/openzfs/include/sys/sysevent.h
+ src/openzfs/module/nvpair/nvpair_alloc_fixed.c
+Copyright: 2006 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/errno.h
+ src/openzfs/include/os/macos/zfs/sys/zpl.h
+Copyright: 2008, 2010, 2014 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2019 Matthew Macy
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/isa_defs.h
+ src/openzfs/include/os/macos/spl/sys/list.h
+ src/openzfs/include/os/macos/spl/sys/rwlock.h
+ src/openzfs/include/sys/crypto/api.h
+ src/openzfs/module/icp/algs/modes/ccm.c
+ src/openzfs/module/icp/core/kcf_mech_tabs.c
+ src/openzfs/module/icp/core/kcf_prov_tabs.c
+ src/openzfs/module/icp/core/kcf_sched.c
+ src/openzfs/module/icp/include/sys/crypto/spi.h
+ src/openzfs/module/icp/spi/kcf_spi.c
+Copyright: 2008 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/kmem.h
+Copyright: 2008 MacZFS Project
+ 2013 Jorgen Lundman <lundman@lundman.net>
+ 2017 Sean Doran <smd@use.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/kmem_impl.h
+Copyright: 1994, 2010 Oracle and/or its affiliates
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/misc.h
+Copyright: 2008, 2010, 2014 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2019 Matthew Macy
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+ 2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/mod.h
+Copyright: 2023-2024 Jorgen Lundman
+ 2024-2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/policy.h
+ src/openzfs/include/os/macos/spl/sys/thread.h
+ src/openzfs/include/os/macos/spl/sys/time.h
+ src/openzfs/include/os/macos/spl/sys/timer.h
+ src/openzfs/include/os/macos/spl/sys/types.h
+ src/openzfs/include/os/macos/spl/sys/vnode.h
+ src/openzfs/module/os/macos/spl/spl-cred.c
+ src/openzfs/module/os/macos/spl/spl-time.c
+ src/openzfs/module/os/macos/spl/spl-vnode.c
+ src/openzfs/module/os/macos/spl/spl-xdr.c
+Copyright: 2008 MacZFS
+ 2013 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/priv.h
+Copyright: 2006 nCircle Network Security, Inc
+License: BSD-2-Clause
+
+Files: src/openzfs/include/os/macos/spl/sys/proc.h
+ src/openzfs/module/os/macos/spl/spl-condvar.c
+ src/openzfs/module/os/macos/spl/spl-err.c
+ src/openzfs/module/os/macos/spl/spl-osx.c
+ src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
+Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/procfs_list.h
+Copyright: 2018 John Gallagher
+ 2019-2020 Matthew Macy
+ 2019 Sara Hartse
+ 2020 Warner Losh
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/sid.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_dir.h
+ src/openzfs/include/sys/zfs_fuid.h
+ src/openzfs/include/sys/zfs_sa.h
+ src/openzfs/include/zfs_prop.h
+ src/openzfs/module/icp/io/sha2_mod.c
+ src/openzfs/module/zfs/zfs_byteswap.c
+Copyright: 2010 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/simd_aarch64.h
+Copyright: 2008, 2010, 2019 Brian Behlendorf
+ 2013 Michael Kjorling
+ 2016 Romain Dolbeau
+ 2019 Matthew Macy
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+ 2024 Shengqi Chen
+ 2025-2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/string.h
+Copyright: 2008, 2010, 2018 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2013 Michael Kjorling
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/sunddi.h
+Copyright: 1990, 2010 Oracle and/or its affiliates
+ 2012 Garrett D'Amore <garrett@damore.org>
+ 2012 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/taskq.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2015 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/taskq_impl.h
+Copyright: 2010 Sun Microsystems, Inc
+ 2011 Nexenta Systems, Inc
+ 2015 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/tsd.h
+Copyright: 2008 MacZFS
+ 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/types32.h
+Copyright: 2008, 2010 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2019 Prakash Surya
+ 2022 Ameer Hamza
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/uio.h
+ src/openzfs/include/sys/uio_impl.h
+Copyright: 2010 Sun Microsystems, Inc
+ 1984, 1986, 1987, 1988, 1989 AT&T
+ 1982, 1986, 1988 The Regents of the University of California
+License: CDDL-1.0 AND BSD-4-Clause-UC
+
+Files: src/openzfs/include/os/macos/spl/sys/utsname.h
+Copyright: 1984, 1986, 1987, 1988, 1989 AT&T
+ 2004 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/vfs.h
+Copyright: 1988, 2010 Oracle and/or its affiliates
+ 1983, 1984, 1985, 1986, 1987, 1988, 1989 AT&T
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/xvattr.h
+Copyright: 1988, 2010 Oracle and/or its affiliates
+ 1983, 1984, 1985, 1986, 1987, 1988, 1989 AT&T
+ 1982, 1986, 1988 The Regents of the University of California
+License: CDDL-1.0 AND BSD-4-Clause-UC
+
+Files: src/openzfs/include/os/macos/spl/sys/vmem.h
+Copyright: 1999, 2010 Oracle and/or its affiliates
+ 2012 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/vmem_impl.h
+Copyright: 1999-2001, 2003 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/wmsum.h
+Copyright: 2021 Alexander Motin
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/spl/sys/zmod.h
+Copyright: 1995-2010 Jean-loup Gailly and Mark Adler
+License: Zlib
+
+Files: src/openzfs/include/os/macos/zfs/sys/ZFSDataset.h
+ src/openzfs/include/os/macos/zfs/sys/ZFSDatasetProxy.h
+ src/openzfs/include/os/macos/zfs/sys/ZFSDatasetScheme.h
+ src/openzfs/include/os/macos/zfs/sys/ZFSPool.h
+ src/openzfs/include/os/macos/zfs/sys/zfs_boot.h
+ src/openzfs/module/os/macos/zfs/ZFSPool.cpp
+Copyright: 2016 Evan Susarret
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/abd_impl_os.h
+Copyright: 2008, 2010 Brian Behlendorf
+ 2018 Chris Williamson
+ 2022 Tino Reichardt
+ 2024 Rob Norris
+ 2025 Jorgen Lundman
+ 2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/abd_os.h
+ src/openzfs/include/sys/abd.h
+Copyright: 2014 Chunwei Chen
+ 2016, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/ldi_buf.h
+ src/openzfs/module/os/macos/zfs/ZFSDataset.cpp
+ src/openzfs/module/os/macos/zfs/ZFSDatasetProxy.cpp
+ src/openzfs/module/os/macos/zfs/zfs_boot.cpp
+Copyright: 2015 Evan Susarret
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/ldi_impl_osx.h
+ src/openzfs/include/os/macos/zfs/sys/ldi_osx.h
+ src/openzfs/module/os/macos/zfs/ldi_iokit.cpp
+ src/openzfs/module/os/macos/zfs/ldi_osx.c
+ src/openzfs/module/os/macos/zfs/ldi_vnode.c
+Copyright: 1994, 2010 Oracle and/or its affiliates
+ 2007 Sun Microsystems, Inc
+ 2013 Joyent, Inc
+ 2015 Evan Susarret
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/vdev_disk_os.h
+Copyright: 2008, 2010, 2018 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2013 Michael Kjorling
+ 2016 Hans Rosenfeld
+ 2017 Olaf Faaland
+ 2017 Dave Eddy
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_bootenv_os.h
+Copyright: 2014, 2017 Matthew Ahrens
+ 2017 Brian Behlendorf
+ 2018 Chris Williamson
+ 2020 Toomas Soome
+ 2023 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_context_os.h
+Copyright: 2023 Jorgen Lundman
+ 2025 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_ctldir.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Lawrence Livermore National Security, LLC
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_debug_os.h
+Copyright: 2008, 2010, 2014, 2025 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2019 Matthew Macy
+ 2022 Tino Reichardt
+ 2025 Rob Norris
+ 2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_ioctl_compat.h
+Copyright: 2013 Jorgen Lundan <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_vfsops_os.h
+ src/openzfs/include/sys/zfs_acl.h
+ src/openzfs/module/zfs/lzjb.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_vnops_os.h
+ src/openzfs/include/sys/sa.h
+ src/openzfs/include/sys/zfs_stat.h
+ src/openzfs/module/zfs/zfs_sa.c
+Copyright: 2010 Oracle and/or its affiliates
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zfs_znode_impl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2015 Delphix
+ 2014 Integros [integros.com]
+ 2016 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/os/macos/zfs/sys/zvolIO.h
+Copyright: 2013, 2016 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/abd_impl.h
+Copyright: 2014 Chunwei Chen
+ 2016, 2019 Delphix
+ 2023, 2024 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/aggsum.h
+ src/openzfs/include/sys/spa_checkpoint.h
+ src/openzfs/module/zfs/spa_checkpoint.c
+Copyright: 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/arc.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2016 Delphix
+ 2013 Saso Kiselkov
+ 2019 Allan Jude
+ 2019 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/arc_impl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2013 Delphix
+ 2013 Saso Kiselkov
+ 2013 Nexenta Systems, Inc
+ 2020 George Amanakis
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/asm_linkage.h
+ src/openzfs/include/sys/vdev_file.h
+Copyright: 2005 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/avl.h
+ src/openzfs/include/sys/uberblock.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2014 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/avl_impl.h
+ src/openzfs/module/nvpair/nvpair_alloc_spl.c
+Copyright: 2004 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/bitmap.h
+Copyright: 2006 Sun Microsystems, Inc
+ 1984, 1986, 1987, 1988, 1989 AT&T
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/bitops.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2019 Delphix
+ 2011 Nexenta Systems, Inc
+ 2014 Spectra Logic Corporation
+ 2013 Saso Kiselkov
+ 2014 Integros [integros.com]
+ 2017 Joyent, Inc
+ 2017 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/blake3.h
+ src/openzfs/module/icp/algs/blake3/blake3.c
+ src/openzfs/module/icp/algs/blake3/blake3_generic.c
+ src/openzfs/module/icp/algs/blake3/blake3_impl.h
+Copyright: 2019-2020 Samuel Neves and Jack O'Connor
+ 2021-2022 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/blkptr.h
+ src/openzfs/include/sys/zfeature.h
+Copyright: 2013 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/bplist.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/bpobj.h
+Copyright: 2010 Oracle and/or its affiliates
+ 2015, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/bptree.h
+Copyright: 2012, 2014 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/bqueue.h
+ src/openzfs/module/zfs/bqueue.c
+Copyright: 2014, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/brt.h
+ src/openzfs/include/sys/brt_impl.h
+ src/openzfs/module/zfs/brt.c
+Copyright: 2020, 2021, 2022 Pawel Jakub Dawidek
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/btree.h
+ src/openzfs/module/zfs/btree.c
+Copyright: 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/crypto/common.h
+Copyright: 2003, 2010 Oracle and/or its affiliates
+ 2013 Saso Kiselkov
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/crypto/icp.h
+Copyright: 2016 Datto, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dataset_kstats.h
+ src/openzfs/module/zfs/dataset_kstats.c
+Copyright: 2018 Delphix
+ 2018 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dbuf.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2020 Delphix
+ 2013 Saso Kiselkov
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/ddt.h
+ src/openzfs/include/sys/ddt_impl.h
+Copyright: 2009, 2010 Oracle and/or its affiliates
+ 2016 Delphix
+ 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2011 Nexenta Systems, Inc
+ 2012 Joyent, Inc
+ 2014 HybridCluster
+ 2014 Spectra Logic Corporation
+ 2013 Saso Kiselkov
+ 2017 Intel Corporation
+ 2022 Hewlett Packard Enterprise Development LP
+ 2025 Klara, Inc
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_impl.h
+Copyright: 2010 Sun Microsystems, Inc
+ 2012 Joyent, Inc
+ 2013, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_objset.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2013 Saso Kiselkov
+ 2014 Spectra Logic Corporation
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_recv.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2020 Delphix
+ 2011 Nexenta Systems, Inc
+ 2013 Joyent, Inc
+ 2019 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_redact.h
+ src/openzfs/include/sys/objlist.h
+ src/openzfs/include/sys/zfs_sysfs.h
+ src/openzfs/module/zfs/objlist.c
+Copyright: 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_send.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2011 Nexenta Systems, Inc
+ 2013 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_traverse.h
+ src/openzfs/module/zfs/bplist.c
+ src/openzfs/module/zfs/dmu_traverse.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_tx.h
+Copyright: 2010 Sun Microsystems, Inc
+ 2012, 2016 Delphix
+ 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dmu_zfetch.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2014, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dnode.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_bookmark.h
+Copyright: 2013, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_crypt.h
+ src/openzfs/include/sys/hkdf.h
+ src/openzfs/include/sys/zio_crypt.h
+ src/openzfs/module/icp/illumos-crypto.c
+ src/openzfs/module/os/macos/zfs/zio_crypt.c
+ src/openzfs/module/zfs/hkdf.c
+Copyright: 2017 Datto, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_dataset.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2018 Delphix
+ 2013 Steven Hartland
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_deadlist.h
+Copyright: 2010 Oracle and/or its affiliates
+ 2018, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_deleg.h
+Copyright: 2007, 2010 Oracle and/or its affiliates
+ 2013, 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_destroy.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2012 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_dir.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2014 Joyent, Inc
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_pool.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2013, 2018 Delphix
+ 2016 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_prop.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012 Delphix
+ 2019 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_scan.h
+Copyright: 2010 Oracle and/or its affiliates
+ 2012, 2017 Delphix
+ 2017, 2019 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_synctask.h
+ src/openzfs/module/zfs/dsl_synctask.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/dsl_userhold.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012 Delphix
+ 2012 Joyent, Inc
+ 2013 Steven Hartland
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/edonr.h
+Copyright: 2009, 2010 Jørn Amundsen <jorn.amundsen@ntnu.no>
+ 2013 Saso Kiselkov
+ 2022 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/fm/fs/zfs.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2020 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/fm/protocol.h
+ src/openzfs/include/sys/fm/util.h
+ src/openzfs/module/zfs/fm.c
+Copyright: 2004, 2010 Oracle and/or its affiliates
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/fs/zfs.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2014, 2016, 2024 Delphix
+ 2011 Nexenta Systems, Inc
+ 2013, 2017 Joyent, Inc
+ 2014 Integros [integros.com]
+ 2017 Intel Corporation
+ 2019 Datto Inc
+ 2010 Robert Milkowski
+ 2021 Colm Buckley <colm@tuatha.org>
+ 2022 Hewlett Packard Enterprise Development LP
+ 2024 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/lua/lauxlib.h
+ src/openzfs/include/sys/lua/lua.h
+ src/openzfs/include/sys/lua/luaconf.h
+ src/openzfs/include/sys/lua/lualib.h
+ src/openzfs/module/lua/lapi.c
+ src/openzfs/module/lua/lapi.h
+ src/openzfs/module/lua/lauxlib.c
+ src/openzfs/module/lua/lbaselib.c
+ src/openzfs/module/lua/lcode.c
+ src/openzfs/module/lua/lcode.h
+ src/openzfs/module/lua/lcorolib.c
+ src/openzfs/module/lua/lctype.c
+ src/openzfs/module/lua/lctype.h
+ src/openzfs/module/lua/ldebug.c
+ src/openzfs/module/lua/ldebug.h
+ src/openzfs/module/lua/ldo.c
+ src/openzfs/module/lua/ldo.h
+ src/openzfs/module/lua/lfunc.c
+ src/openzfs/module/lua/lfunc.h
+ src/openzfs/module/lua/lgc.c
+ src/openzfs/module/lua/lgc.h
+ src/openzfs/module/lua/llex.c
+ src/openzfs/module/lua/llex.h
+ src/openzfs/module/lua/llimits.h
+ src/openzfs/module/lua/lmem.c
+ src/openzfs/module/lua/lmem.h
+ src/openzfs/module/lua/lobject.c
+ src/openzfs/module/lua/lobject.h
+ src/openzfs/module/lua/lopcodes.c
+ src/openzfs/module/lua/lopcodes.h
+ src/openzfs/module/lua/lparser.c
+ src/openzfs/module/lua/lparser.h
+ src/openzfs/module/lua/lstate.c
+ src/openzfs/module/lua/lstate.h
+ src/openzfs/module/lua/lstring.c
+ src/openzfs/module/lua/lstring.h
+ src/openzfs/module/lua/lstrlib.c
+ src/openzfs/module/lua/ltable.c
+ src/openzfs/module/lua/ltable.h
+ src/openzfs/module/lua/ltablib.c
+ src/openzfs/module/lua/ltm.c
+ src/openzfs/module/lua/ltm.h
+ src/openzfs/module/lua/lvm.c
+ src/openzfs/module/lua/lvm.h
+ src/openzfs/module/lua/lzio.c
+ src/openzfs/module/lua/lzio.h
+Copyright: 1994-2015 Lua.org, PUC-Rio
+License: MIT
+
+Files: src/openzfs/include/sys/metaslab.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2018 Delphix
+ 2017 Intel Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/metaslab_impl.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2011, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/mmp.h
+ src/openzfs/module/zfs/mmp.c
+ src/openzfs/module/zfs/zfs_ratelimit.c
+Copyright: 2017 Lawrence Livermore National Security, LLC
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/mntent.h
+Copyright: 2008 Sun Microsystems, Inc
+ 1984, 1986, 1987, 1988, 1989 AT&T
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/multilist.h
+ src/openzfs/module/zfs/multilist.c
+Copyright: 2013, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/nvpair.h
+Copyright: 2000, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/nvpair_impl.h
+Copyright: 2004 Sun Microsystems, Inc
+ 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/pathname.h
+Copyright: 1989, 2010 Oracle and/or its affiliates
+ 1983, 1984, 1985, 1986, 1987, 1988, 1989 AT&T
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/qat.h
+Copyright: 2018 Tom Caputi
+ 2019 Chengfei Zhu
+ 2019 Matthew Macy
+ 2019 Andrea Gelmini
+ 2021 Ahelenia Ziemiańska
+ 2022 Tino Reichardt
+ 2025 Rob Norris
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/range_tree.h
+ src/openzfs/module/zfs/space_reftree.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2013, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/rrwlock.h
+Copyright: 2007 Sun Microsystems, Inc
+ 2012 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/sa_impl.h
+Copyright: 2010 Oracle and/or its affiliates
+ 2013 Delphix
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/sha2.h
+ src/openzfs/include/sys/zfs_impl.h
+ src/openzfs/module/icp/algs/sha2/sha256_impl.c
+ src/openzfs/module/icp/algs/sha2/sha2_generic.c
+ src/openzfs/module/icp/algs/sha2/sha512_impl.c
+ src/openzfs/module/zfs/blake3_zfs.c
+ src/openzfs/module/zfs/zfs_impl.c
+Copyright: 2022 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/skein.h
+ src/openzfs/module/icp/algs/skein/skein.c
+ src/openzfs/module/icp/algs/skein/skein_block.c
+ src/openzfs/module/icp/algs/skein/skein_impl.h
+ src/openzfs/module/icp/algs/skein/skein_iv.c
+ src/openzfs/module/icp/algs/skein/skein_port.h
+Copyright: 2013 Doug Whiting
+License: public-domain
+
+Files: src/openzfs/include/sys/spa.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2024 Delphix
+ 2011 Nexenta Systems, Inc
+ 2014 Spectra Logic Corporation
+ 2013 Saso Kiselkov
+ 2014 Integros [integros.com]
+ 2017 Joyent, Inc
+ 2017 Intel Corporation
+ 2019 Allan Jude
+ 2019, 2025 Klara, Inc
+ 2019 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/spa_impl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2024 Delphix
+ 2011 Nexenta Systems, Inc
+ 2014 Spectra Logic Corporation
+ 2013 Saso Kiselkov
+ 2016 Actifio, Inc
+ 2017 Intel Corporation
+ 2019 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/spa_log_spacemap.h
+ src/openzfs/module/zfs/spa_log_spacemap.c
+Copyright: 2018, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/space_map.h
+ src/openzfs/module/zfs/space_map.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2012, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/space_reftree.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2013 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/sysevent/eventdefs.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2015 Nexenta Systems, Inc
+ 2017 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/txg.h
+Copyright: 2010 Sun Microsystems, Inc
+ 2012, 2017 Delphix
+ 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/txg_impl.h
+ src/openzfs/module/zfs/dmu_zfetch.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2013, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/u8_textprep.h
+ src/openzfs/include/sys/unique.h
+ src/openzfs/module/icp/api/kcf_cipher.c
+ src/openzfs/module/icp/api/kcf_ctxops.c
+ src/openzfs/module/icp/api/kcf_mac.c
+ src/openzfs/module/icp/core/kcf_callprov.c
+ src/openzfs/module/icp/include/sys/crypto/sched_impl.h
+ src/openzfs/module/os/macos/spl/spl-list.c
+ src/openzfs/module/zfs/gzip.c
+ src/openzfs/module/zfs/unique.c
+Copyright: 2007 Sun Microsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/u8_textprep_data.h
+Copyright: 2007 Sun Microsystems, Inc.
+ 1991-2006 Unicode, Inc.
+License: CDDL-1.0 AND LicenseRef-Unicode-data-2006
+
+Files: src/openzfs/include/sys/uberblock_impl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2016, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/uuid.h
+Copyright: 2006 Sun Microsystems, Inc.
+ 1990-1993, 1996 Open Software Foundation, Inc.
+ 1989 Hewlett-Packard Company, Palo Alto, Ca.
+ Digital Equipment Corporation, Maynard, Mass.
+ 1998 Microsoft
+License: CDDL-1.0 AND LicenseRef-OSF-HP-DEC-uuid
+
+Files: src/openzfs/include/sys/vdev.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2017 Intel Corporation
+ 2019 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_disk.h
+Copyright: 2008-2010 Lawrence Livermore National Security, LLC
+ 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_draid.h
+Copyright: 2016 Intel Corporation
+ 2020 Lawrence Livermore National Security, LLC
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_impl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2017 Intel Corporation
+ 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_indirect_births.h
+ src/openzfs/include/sys/vdev_indirect_mapping.h
+ src/openzfs/module/zfs/vdev_indirect_births.c
+Copyright: 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_initialize.h
+ src/openzfs/include/sys/zcp_global.h
+ src/openzfs/include/sys/zcp_iter.h
+ src/openzfs/include/sys/zcp_prop.h
+ src/openzfs/module/zfs/zcp_get.c
+ src/openzfs/module/zfs/zcp_set.c
+Copyright: 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_raidz.h
+Copyright: 2016 Gvozden Neskovic <neskovic@compeng.uni-frankfurt.de>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_raidz_impl.h
+ src/openzfs/module/zfs/vdev_raidz_math.c
+ src/openzfs/module/zfs/vdev_raidz_math_impl.h
+ src/openzfs/module/zfs/vdev_raidz_math_scalar.c
+Copyright: 2016 Gvozden Nešković
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_rebuild.h
+Copyright: 2018 Intel Corporation
+ 2020 Lawrence Livermore National Security, LLC
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_removal.h
+Copyright: 2014, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/vdev_trim.h
+Copyright: 2019 Lawrence Livermore National Security, LLC
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zap.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2017 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zap_impl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2014 Spectra Logic Corporation
+ 2013, 2016 Delphix
+ 2017 Nexenta Systems, Inc
+ 2024 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zap_leaf.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zcp.h
+ src/openzfs/module/zfs/zcp.c
+ src/openzfs/module/zfs/zcp_iter.c
+Copyright: 2016, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zcp_set.h
+Copyright: 2019 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_bootenv.h
+Copyright: 2020 Toomas Soome <tsoome@me.com>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_chksum.h
+Copyright: 2021 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_context.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2012, 2018 Delphix
+ 2012 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_debug.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_delay.h
+Copyright: 2008, 2010, 2018 Brian Behlendorf
+ 2013 Michael Kjorling
+ 2013 Matthew Ahrens
+ 2022 Tino Reichardt
+ 2025 Rob Norris
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_file.h
+Copyright: 2019-2020 Matthew Macy
+ 2021 George Wilson
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+ 2024-2025 Rob Norris
+ 2025 Alexander Moch
+ 2025 Paul Dagnelie
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_ioctl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2024 Delphix
+ 2016 RackTop Systems
+ 2017 Intel Corporation
+ 2024-2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_ioctl_impl.h
+Copyright: 2019 Matthew Macy
+ 2020-2021 Ryan Moeller
+ 2020 Pawel Jakub Dawidek
+ 2021 Alan Somers
+ 2022 Richard Yao
+ 2022 Tino Reichardt
+ 2022 Ahelenia Ziemiańska
+ 2023 Jorgen Lundman
+ 2025 Rob Norris
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_onexit.h
+Copyright: 2010 Oracle and/or its affiliates
+ 2020 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_project.h
+Copyright: 2017 Intel Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_quota.h
+Copyright: 2019 Ryan Moeller
+ 2020 Matthew Ahrens
+ 2022 Tino Reichardt
+ 2025 Ameer Hamza
+ 2025 Rob Norris
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_racct.h
+Copyright: 2021 iXsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_ratelimit.h
+Copyright: 2016 Lawrence Livermore National Security, LLC
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_refcount.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_rlock.h
+Copyright: 2006 Sun Microsystems, Inc
+ 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_vfsops.h
+Copyright: 2020 iXsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_vnops.h
+Copyright: 2010 Oracle and/or its affiliates
+ 2025 Rob Norris <robn@despairlabs.com>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zfs_znode.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2016 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zil.h
+ src/openzfs/include/sys/zil_impl.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zio.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2012, 2024 Delphix
+ 2013 Saso Kiselkov
+ 2013 Joyent, Inc
+ 2016 Toomas Soome <tsoome@me.com>
+ 2019 Allan Jude
+ 2019, 2023, 2024 Klara Inc
+ 2019-2020 Michael Niewöhner
+ 2024 George Melikov
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zio_checksum.h
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2014, 2016 Delphix
+ 2013 Saso Kiselkov
+ 2021 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zio_compress.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2019 Allan Jude
+ 2019, 2024 Klara, Inc
+ 2015, 2016 Delphix
+ 2021, 2024 George Melikov
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zio_impl.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2012, 2015 Delphix
+ 2024 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zrlock.h
+Copyright: 2010 Oracle and/or its affiliates
+ 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zstd/zstd.h
+ src/openzfs/module/zstd/zfs_zstd.c
+Copyright: 2016-2018 Klara Inc
+ 2016-2018 Allan Jude
+ 2018-2020 Sebastian Gottschall
+ 2019-2020 Michael Niewöhner
+ 2020 The FreeBSD Foundation
+License: BSD-3-Clause
+
+Files: src/openzfs/include/sys/zthr.h
+ src/openzfs/module/zfs/aggsum.c
+ src/openzfs/module/zfs/dmu_redact.c
+Copyright: 2017, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zvol.h
+Copyright: 2006, 2010 Oracle and/or its affiliates
+ 2016 Actifio, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/sys/zvol_impl.h
+Copyright: 2024, 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/zfeature_common.h
+Copyright: 2011, 2018 Delphix
+ 2013 Saso Kiselkov
+ 2013 Joyent, Inc
+ 2017 Intel Corporation
+ 2024 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/zfs_comutil.h
+ src/openzfs/module/zcommon/zfs_comutil.c
+Copyright: 2008, 2010 Oracle and/or its affiliates
+ 2012, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/zfs_crrd.h
+ src/openzfs/module/zfs/zfs_crrd.c
+Copyright: 2024 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/include/zfs_deleg.h
+Copyright: 2007, 2010 Oracle and/or its affiliates
+ 2010 Nexenta Systems, Inc
+ 2013, 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/include/zfs_fletcher.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2013 Saso Kiselkov
+License: CDDL-1.0
+
+Files: src/openzfs/include/zfs_namecheck.h
+ src/openzfs/module/zcommon/zfs_namecheck.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2013, 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/avl/avl.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2015 Nexenta Systems, Inc
+ 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/icp/algs/aes/aes_impl.c
+ src/openzfs/module/icp/algs/aes/aes_impl_aesni.c
+ src/openzfs/module/icp/algs/aes/aes_impl_generic.c
+ src/openzfs/module/icp/algs/aes/aes_impl_x86-64.c
+ src/openzfs/module/icp/algs/modes/gcm_generic.c
+ src/openzfs/module/icp/include/modes/gcm_impl.h
+ src/openzfs/module/icp/io/aes.c
+Copyright: 2003, 2010 Oracle and/or its affiliates
+License: CDDL-1.0
+
+Files: src/openzfs/module/icp/algs/aes/aes_impl_aesv8.c
+Copyright: 2023 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/icp/algs/blake3/blake3_impl.c
+ src/openzfs/module/zfs/zfs_chksum.c
+Copyright: 2021-2022 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/module/icp/algs/edonr/edonr.c
+Copyright: 2009, 2010 Jørn Amundsen <jorn.amundsen@ntnu.no>
+ 2013 Saso Kiselkov
+ 2023 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/module/icp/algs/modes/gcm.c
+Copyright: 2008, 2010 Oracle and/or its affiliates
+License: CDDL-1.0
+
+Files: src/openzfs/module/icp/asm-aarch64/aes/aesv8-armx.S
+ src/openzfs/module/icp/asm-aarch64/aes/ghashv8-armx.S
+Copyright: 1998-2008 The OpenSSL Project
+License: OpenSSL
+
+Files: src/openzfs/module/icp/asm-aarch64/sha2/sha256-armv8.S
+ src/openzfs/module/icp/asm-aarch64/sha2/sha512-armv8.S
+Copyright: 2004-2022 The OpenSSL Project Authors
+ 2022 Tino Reichardt <milky-zfs@mcmilk.de>
+License: Apache-2.0
+
+Files: src/openzfs/module/icp/include/generic_impl.c
+Copyright: 2003, 2010 Oracle and/or its affiliates
+ 2022 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/module/icp/include/sha2/sha2_impl.h
+Copyright: 2009 Sun Microsystems, Inc
+ 2022 Tino Reichardt <milky-zfs@mcmilk.de>
+License: CDDL-1.0
+
+Files: src/openzfs/module/lua/lcompat.c
+Copyright: 2016 Delphix
+License: MIT
+
+Files: src/openzfs/module/lua/setjmp/setjmp.S
+Copyright: 2018 Chris Williamson
+ 2019 Romain Dolbeau
+ 2023 Han Gao
+License: CDDL-1.0
+
+Files: src/openzfs/module/lua/setjmp/setjmp_aarch64.S
+Copyright: 2014 Andrew Turner
+ 2014-2015 The FreeBSD Foundation
+License: BSD-2-Clause
+
+Files: src/openzfs/module/nvpair/fnvpair.c
+Copyright: 2012, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/nvpair/nvpair.c
+Copyright: 2000, 2010 Oracle and/or its affiliates
+ 2015, 2017 Delphix
+ 2018 RackTop Systems
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/Makefile.am
+Copyright: 2023-2026 Jorgen Lundman
+ 2025-2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-kmem.c
+Copyright: 2008 MacZFS
+ 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+ 2014 Brendon Humphrey <brendon.humphrey@mac.com>
+ 2017, 2021, 2023 Sean Doran <smd@use.net>
+ 2015 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-kstat.c
+Copyright: 2013 Jorgen Lundman <lundman@lundman.net>
+ 2014 Brendon Humphrey <brendon.humphrey@mac.com>
+ 2023 Sean Doran <smd@use.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-mutex.c
+ src/openzfs/module/os/macos/spl/spl-rwlock.c
+ src/openzfs/module/os/macos/spl/spl-thread.c
+Copyright: 2008 MacZFS
+ 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+ 2023 Sean Doran <smd@use.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-proc.c
+Copyright: 2008, 2010, 2014 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2019 Matthew Macy
+ 2022 Tino Reichardt
+ 2023 Jorgen Lundman
+ 2024 Joergen Lundman
+ 2026 Alex James
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-proc_list.c
+Copyright: 2020 Matthew Macy
+ 2023 Jorgen Lundman
+ 2023 Brooks Davis
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-qsort.c
+Copyright: 1995 NeXT Computer, Inc
+ 1992-1993 The Regents of the University of California
+License: BSD-4-Clause-UC
+
+Files: src/openzfs/module/os/macos/spl/spl-seg_kmem.c
+Copyright: 1998, 2010 Oracle and/or its affiliates
+ 2014 Brendon Humphrey (brendon.humphrey@mac.com)
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-taskq.c
+Copyright: 2010 Sun Microsystems, Inc
+ 2015 Nexenta Systems, Inc
+ 2015, 2020 Jorgen Lundman <lundman@lundman.net>
+ 2023 Sean Doran <smd@use.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-tsd.c
+Copyright: 2014 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-uio.c
+Copyright: 2015 Chunwei Chen
+ 2021 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/spl/spl-vmem.c
+Copyright: 2010 Sun Microsystems, Inc
+ 2012 Delphix
+ 2012 Joyent, Inc
+ 2017, 2021, 2023 Sean Doran <smd@use.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/ZFSDatasetScheme.cpp
+Copyright: 2015 Evan Susarret
+ 2017 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/abd_os.c
+Copyright: 2014 Chunwei Chen
+ 2016 Delphix
+ 2020 Jorgen Lundman
+ 2021 Sean Doran
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/arc_os.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2018 Joyent, Inc
+ 2011, 2019 Delphix
+ 2014 Saso Kiselkov
+ 2017 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/spa_misc_os.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2019 Delphix
+ 2015 Nexenta Systems, Inc
+ 2014 Spectra Logic Corporation
+ 2013 Saso Kiselkov
+ 2017 Datto Inc
+ 2017 Intel Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/vdev_disk.c
+Copyright: 2014, 2016 Jorgen Lundman
+ 2005, 2010 Oracle and/or its affiliates
+ 2012, 2016 Delphix
+ 2016 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/vdev_file_os.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/vdev_label_os.c
+Copyright: 2023 iXsystems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_acl.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2013 Delphix
+ 2017 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_ctldir.c
+ src/openzfs/module/os/macos/zfs/zvol_os.c
+Copyright: 2020 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_debug.c
+Copyright: 2010 Oracle and/or its affiliates
+ 2012, 2014 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_dir.c
+ src/openzfs/module/zfs/zap_leaf.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2013, 2016 Delphix
+ 2017 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_file_os.c
+Copyright: 2023, 2025 Jorgen Lundman
+ 2026 Joergen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_fuid_os.c
+ src/openzfs/module/zfs/zfs_fuid.c
+Copyright: 2007, 2010 Oracle and/or its affiliates
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_osx.cpp
+ src/openzfs/module/os/macos/zfs/zvolIO.cpp
+Copyright: 2013-2020 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_racct.c
+Copyright: 2008, 2010, 2014 Brian Behlendorf
+ 2010 Ricardo M. Correia
+ 2019 Matthew Macy
+ 2022 Tino Reichardt
+ 2023, 2025 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_vfsops.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Pawel Jakub Dawidek <pawel@dawidek.net>
+ 2012, 2015 Delphix
+ 2016 Nexenta Systems, Inc
+ 2010 Robert Milkowski
+ 2013, 2020 Jorgen Lundman
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2015 Chunwei Chen
+ 2017 Nexenta Systems, Inc
+ 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+ 2007 Jeremy Teo
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
+ src/openzfs/module/os/macos/zfs/zfs_vnops_osx_lib.c
+Copyright: 2013 Will Andrews <will@firepipe.net>
+ 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_vnops_osx_xattr.c
+Copyright: 2011 Lawrence Livermore National Security, LLC
+License: CDDL-1.0
+
+Files: src/openzfs/module/os/macos/zfs/zfs_znode_os.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2007-2009 Apple Inc
+ 2012, 2018 Delphix
+ 2007 Jeremy Teo
+ 2011 Martin Matuska <mm@FreeBSD.org>
+ 2013 Jorgen Lundman <lundman@lundman.net>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zcommon/zfeature_common.c
+Copyright: 2011, 2018 Delphix
+ 2013 Saso Kiselkov
+ 2013 Joyent, Inc
+ 2014 Nexenta Systems, Inc
+ 2017 Intel Corporation
+ 2019, 2024 Klara, Inc
+ 2019 Allan Jude
+License: CDDL-1.0
+
+Files: src/openzfs/module/zcommon/zfs_deleg.c
+Copyright: 2007, 2010 Oracle and/or its affiliates
+ 2010 Nexenta Systems, Inc
+ 2013, 2015 Delphix
+ 2016 Igor Kozhukhov <ikozhukhov@gmail.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zcommon/zfs_fletcher.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2016 Gvozden Nešković
+ 2013 Saso Kiselkov
+ 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zcommon/zfs_fletcher_superscalar.c
+ src/openzfs/module/zcommon/zfs_fletcher_superscalar4.c
+Copyright: 2016 Romain Dolbeau
+License: BSD-2-Clause or GPL-2.0-only
+
+Files: src/openzfs/module/zcommon/zfs_prop.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2018 Delphix
+ 2013 Saso Kiselkov
+ 2016 Joyent, Inc
+ 2019 Klara Inc
+ 2019 Allan Jude
+ 2022 Hewlett Packard Enterprise Development LP
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/module/zcommon/zpool_prop.c
+Copyright: 2007, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2012, 2018 Delphix
+ 2021 Colm Buckley <colm@tuatha.org>
+ 2021, 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zcommon/zprop_common.c
+Copyright: 2010 Sun Microsystems, Inc
+ 2012 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/abd.c
+Copyright: 2014 Chunwei Chen
+ 2019 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/arc.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2018 Joyent, Inc
+ 2011, 2020 Delphix
+ 2014 Saso Kiselkov
+ 2017 Nexenta Systems, Inc
+ 2019 loli10K <ezomori.nozomu@gmail.com>
+ 2020 George Amanakis
+ 2019, 2024, 2025 Klara, Inc
+ 2019 Allan Jude
+ 2020 The FreeBSD Foundation
+ 2021, 2024 George Melikov
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/blkptr.c
+Copyright: 2013, 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/bpobj.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2018 Delphix
+ 2017 Datto Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/bptree.c
+Copyright: 2011, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dbuf.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2012, 2020 Delphix
+ 2013 Saso Kiselkov
+ 2014 Spectra Logic Corporation
+ 2019 Klara Inc
+ 2019 Allan Jude
+ 2021, 2022 Pawel Jakub Dawidek
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dbuf_stats.c
+Copyright: 2013, 2015, 2018, 2022 Brian Behlendorf
+ 2013 Michael Kjorling
+ 2014, 2017 Ned Bass
+ 2015 Prakash Surya
+ 2015 Tim Chase
+ 2016 George Wilson
+ 2016 Chunwei Chen
+ 2017 Olaf Faaland
+ 2018 Tim Schumacher
+ 2018 Giuseppe Di Natale
+ 2019-2020 Matthew Macy
+ 2020 Arvind Sankar
+ 2022 Tino Reichardt
+ 2022 Ahelenia Ziemiańska
+ 2023, 2025 Rob Norris
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/ddt.c
+Copyright: 2009, 2010 Oracle and/or its affiliates
+ 2012, 2016 Delphix
+ 2022 Pawel Jakub Dawidek
+ 2019, 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/ddt_log.c
+Copyright: 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/ddt_stats.c
+Copyright: 2009, 2010 Oracle and/or its affiliates
+ 2012, 2016 Delphix
+ 2022 Pawel Jakub Dawidek
+ 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/ddt_zap.c
+Copyright: 2009, 2010 Oracle and/or its affiliates
+ 2018 Delphix
+ 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2013 Saso Kiselkov
+ 2013 Joyent, Inc
+ 2016 Nexenta Systems, Inc
+ 2015 Chunwei Chen
+ 2019 Datto Inc
+ 2019, 2023 Klara Inc
+ 2019 Allan Jude
+ 2022 Hewlett Packard Enterprise Development LP
+ 2021, 2022 Pawel Jakub Dawidek
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu_diff.c
+Copyright: 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2019 loli10K <ezomori.nozomu@gmail.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu_direct.c
+Copyright: 2024-2025 Alexander Motin
+ 2024-2025 Brian Atkinson
+ 2025 Rob Norris
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu_object.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2013, 2017 Delphix
+ 2014 HybridCluster
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu_objset.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2020 Delphix
+ 2013 Saso Kiselkov
+ 2013 Joyent, Inc
+ 2014 Spectra Logic Corporation
+ 2015 STRATO AG, Inc
+ 2016 Actifio, Inc
+ 2017 Nexenta Systems, Inc
+ 2017 Open-E, Inc
+ 2018 loli10K <ezomori.nozomu@gmail.com>
+ 2019 Klara Inc
+ 2019 Allan Jude
+ 2022 Hewlett Packard Enterprise Development LP
+ 2025 Rob Norris <robn@despairlabs.com>
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu_recv.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2011, 2020 Delphix
+ 2014 Joyent, Inc
+ 2014 HybridCluster
+ 2018 loli10K <ezomori.nozomu@gmail.com>
+ 2019, 2024 Klara, Inc
+ 2019 Allan Jude
+ 2019 Datto Inc
+ 2022 Axcient
+ 2025 Rob Norris <robn@despairlabs.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu_send.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2011, 2018 Delphix
+ 2014 Joyent, Inc
+ 2014 HybridCluster
+ 2016 RackTop Systems
+ 2016 Actifio, Inc
+ 2019, 2024 Klara, Inc
+ 2019 Allan Jude
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dmu_tx.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2012, 2017 Delphix
+ 2024, 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dnode.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2020 Delphix
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dnode_sync.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2020 Delphix
+ 2014 Spectra Logic Corporation
+ 2020 Oxide Computer Company
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_bookmark.c
+Copyright: 2013, 2018 Delphix
+ 2017 Nexenta Systems, Inc
+ 2019, 2020 Christian Schwarz
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_crypt.c
+Copyright: 2017 Datto, Inc
+ 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_dataset.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2014 Joyent, Inc
+ 2014 RackTop Systems
+ 2014 Spectra Logic Corporation
+ 2016 Actifio, Inc
+ 2016 OmniTI Computer Consulting, Inc
+ 2017 Nexenta Systems, Inc
+ 2019 Klara Inc
+ 2019 Allan Jude
+ 2020 The FreeBSD Foundation
+ 2025 Rob Norris <robn@despairlabs.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_deadlist.c
+Copyright: 2010 Oracle and/or its affiliates
+ 2012, 2019 Delphix
+ 2014 Spectra Logic Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_deleg.c
+Copyright: 2007, 2010 Oracle and/or its affiliates
+ 2011, 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_destroy.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2013 Steven Hartland
+ 2013 Joyent, Inc
+ 2016 Actifio, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_dir.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2013 Martin Matuska
+ 2014 Joyent, Inc
+ 2014 Spectra Logic Corporation
+ 2016 Actifio, Inc
+ 2018 loli10K <ezomori.nozomu@gmail.com>
+ 2023 Hewlett Packard Enterprise Development LP
+ 2025 Rob Norris <robn@despairlabs.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_pool.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2013 Steven Hartland
+ 2014 Spectra Logic Corporation
+ 2016 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_prop.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2015 Delphix
+ 2013 Martin Matuska
+ 2019 Joyent, Inc
+ 2022 Hewlett Packard Enterprise Development LP
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_scan.c
+Copyright: 2008, 2010 Oracle and/or its affiliates
+ 2011, 2021 Delphix
+ 2016 Gary Mills
+ 2017, 2019 Datto Inc
+ 2015 Nexenta Systems, Inc
+ 2019 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/dsl_userhold.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2017 Delphix
+ 2013 Steven Hartland
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/edonr_zfs.c
+ src/openzfs/module/zfs/skein_zfs.c
+Copyright: 2013 Saso Kiselkov
+ 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/lz4.c
+Copyright: 2011-present Yann Collet
+License: BSD-2-Clause
+
+Files: src/openzfs/module/zfs/lz4_zfs.c
+Copyright: 2011-2013 Yann Collet
+License: BSD-2-Clause
+
+Files: src/openzfs/module/zfs/metaslab.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2019 Delphix
+ 2013 Saso Kiselkov
+ 2015 Nexenta Systems, Inc
+ 2017 Intel Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/pathname.c
+Copyright: 2007 Sun Microsystems, Inc
+ 1983, 1984, 1985, 1986, 1987, 1988, 1989 AT&T
+ 1982, 1986, 1988 The Regents of the University of California
+License: CDDL-1.0 AND BSD-4-Clause-UC
+
+Files: src/openzfs/module/zfs/range_tree.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2013, 2019 Delphix
+ 2015 Nexenta Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/refcount.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2021 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/rrwlock.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2012 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/sa.c
+Copyright: 2010 Oracle and/or its affiliates
+ 2013, 2017 Delphix
+ 2014 Spectra Logic Corporation
+ 2023 RackTop Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/sha2_zfs.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2013 Saso Kiselkov
+ 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/spa.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2024 Delphix
+ 2018 Nexenta Systems, Inc
+ 2014 Spectra Logic Corporation
+ 2013 Saso Kiselkov
+ 2014 Integros [integros.com]
+ 2016 Toomas Soome <tsoome@me.com>
+ 2016 Actifio, Inc
+ 2017, 2018 Joyent, Inc
+ 2017, 2019 Datto Inc
+ 2017 Intel Corporation
+ 2021 Colm Buckley <colm@tuatha.org>
+ 2023 Hewlett Packard Enterprise Development LP
+ 2023, 2024 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/spa_config.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Nexenta Systems, Inc
+ 2011, 2020 Delphix
+ 2017 Joyent, Inc
+ 2021 Colm Buckley <colm@tuatha.org>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/spa_errlog.c
+Copyright: 2006, 2010 Oracle and/or its affiliates
+ 2013, 2014 Delphix
+ 2019 Datto Inc
+ 2021, 2022 George Amanakis
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/spa_history.c
+Copyright: 2006, 2010 Oracle and/or its affiliates
+ 2011, 2018 Delphix
+ 2014 Integros [integros.com]
+ 2017 Joyent, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/spa_misc.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2024 Delphix
+ 2015 Nexenta Systems, Inc
+ 2014 Spectra Logic Corporation
+ 2013 Saso Kiselkov
+ 2017 Datto Inc
+ 2017 Intel Corporation
+ 2019 loli10K <ezomori.nozomu@gmail.com>
+ 2023, 2024, 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/spa_stats.c
+Copyright: 2013-2014, 2016, 2018-2019 Brian Behlendorf
+ 2013-2014 Matthew Ahrens
+ 2013 Michael Kjorling
+ 2013 Prakash Surya
+ 2014, 2022 Richard Yao
+ 2014 George Wilson
+ 2014 Ned Bass
+ 2014 Cyril Plisko
+ 2014 Igor Lvovsky
+ 2016 Gvozden Neskovic
+ 2017-2018 Olaf Faaland
+ 2017 Alek Pinchuk
+ 2017 Gaurav Kumar
+ 2017 ka7
+ 2018 John Gallagher
+ 2018 Tony Hutter
+ 2019-2020 Matthew Macy
+ 2019 Sara Hartse
+ 2020 Ryan Moeller
+ 2020 Arvind Sankar
+ 2020 George Amanakis
+ 2021, 2025 Alexander Motin
+ 2022 Tino Reichardt
+ 2022 Andrew Walker
+ 2022 Ahelenia Ziemiańska
+ 2024 Brian Atkinson
+ 2025 Rob Norris
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/txg.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Martin Matuska
+ 2012, 2019 Delphix
+ 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/u8_textprep.c
+Copyright: 2008 Sun Microsystems, Inc
+ 2022 MNX Cloud, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/uberblock.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2013, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2021 Delphix
+ 2017 Nexenta Systems, Inc
+ 2014 Integros [integros.com]
+ 2016 Toomas Soome <tsoome@me.com>
+ 2017 Joyent, Inc
+ 2017 Intel Corporation
+ 2019 Datto Inc
+ 2021, 2025 Klara, Inc
+ 2021, 2023 Hewlett Packard Enterprise Development LP
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_draid.c
+Copyright: 2018 Intel Corporation
+ 2020 Lawrence Livermore National Security, LLC
+ 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_draid_rand.c
+Copyright: 2020 Brian Behlendorf
+ 2025 Rob Norris
+License: public-domain
+
+Files: src/openzfs/module/zfs/vdev_file.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_indirect.c
+Copyright: 2014, 2017, 2020 Delphix
+ 2019 loli10K <ezomori.nozomu@gmail.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_indirect_mapping.c
+Copyright: 2015, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_initialize.c
+Copyright: 2016, 2024 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_label.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2020 Delphix
+ 2017 Intel Corporation
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_mirror.c
+Copyright: 2010 Sun Microsystems, Inc
+ 2012, 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_missing.c
+ src/openzfs/module/zfs/vdev_root.c
+Copyright: 2010 Sun Microsystems, Inc
+ 2012, 2016 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_queue.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2012, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_raidz.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2020 Delphix
+ 2016 Gvozden Nešković
+ 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_rebuild.c
+Copyright: 2018 Intel Corporation
+ 2020 Lawrence Livermore National Security, LLC
+ 2022 Hewlett Packard Enterprise Development LP
+ 2024 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_removal.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2020 Delphix
+ 2019 loli10K <ezomori.nozomu@gmail.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/vdev_trim.c
+Copyright: 2016, 2024 Delphix
+ 2019 Lawrence Livermore National Security, LLC
+ 2021 Hewlett Packard Enterprise Development LP
+ 2023 RackTop Systems, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zap.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2014 Spectra Logic Corporation
+ 2023 Alexander Stetsenko <alex.stetsenko@gmail.com>
+ 2023 Klara Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zap_micro.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2018 Delphix
+ 2014 Spectra Logic Corporation
+ 2017 Nexenta Systems, Inc
+ 2024 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zcp_global.c
+Copyright: 2016, 2017 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zcp_synctask.c
+Copyright: 2016, 2017 Delphix
+ 2019, 2020 Christian Schwarz
+ 2020 Joyent, Inc
+ 2025 Rob Norris <robn@despairlabs.com>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfeature.c
+Copyright: 2011, 2015 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_fm.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2012, 2021 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_ioctl.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Martin Matuska
+ 2015 OmniTI Computer Consulting, Inc
+ 2012 Pawel Jakub Dawidek
+ 2014, 2016 Joyent, Inc
+ 2016 Nexenta Systems, Inc
+ 2011, 2024 Delphix
+ 2013 Saso Kiselkov
+ 2013 Steven Hartland
+ 2014 Integros [integros.com]
+ 2016 Toomas Soome <tsoome@me.com>
+ 2016 Actifio, Inc
+ 2018 loli10K <ezomori.nozomu@gmail.com>
+ 2017 RackTop Systems
+ 2017 Open-E, Inc
+ 2019 Datto Inc
+ 2019, 2020 Christian Schwarz
+ 2019, 2021, 2023, 2024 Klara Inc
+ 2019 Allan Jude
+ 2024 Oxide Computer Company
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_log.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2015, 2018 Delphix
+ 2022 Pawel Jakub Dawidek
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_onexit.c
+Copyright: 2010 Oracle and/or its affiliates
+ 2013, 2020 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_quota.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011 Pawel Jakub Dawidek
+ 2012, 2015, 2018 Delphix
+ 2014 Integros [integros.com]
+ 2016 Nexenta Systems, Inc
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_replay.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012 Cyril Plisko
+ 2013, 2017 Delphix
+ 2021, 2022 Pawel Jakub Dawidek
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_rlock.c
+Copyright: 2010 Sun Microsystems, Inc
+ 2012, 2018 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_vnops.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2015 Chunwei Chen
+ 2017 Nexenta Systems, Inc
+ 2021, 2022 Pawel Jakub Dawidek
+ 2025 Rob Norris <robn@despairlabs.com>
+ 2025 Klara, Inc
+ 2007 Jeremy Teo
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zfs_znode.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2014 Integros [integros.com]
+ 2007 Jeremy Teo
+ 2011 Martin Matuska <mm@FreeBSD.org>
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zil.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2018 Delphix
+ 2014 Integros [integros.com]
+ 2018 Datto Inc
+ 2025 Klara, Inc
+ 2010 Robert Milkowski
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zio.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2011, 2022 Delphix
+ 2011 Nexenta Systems, Inc
+ 2017 Intel Corporation
+ 2019, 2023, 2024, 2025 Klara, Inc
+ 2019 Allan Jude
+ 2021 Datto, Inc
+ 2021, 2024 George Melikov
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zio_checksum.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2013, 2016 Delphix
+ 2013 Saso Kiselkov
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zio_compress.c
+Copyright: 2009 Sun Microsystems, Inc
+ 2013 Saso Kiselkov
+ 2013, 2018 Delphix
+ 2019, 2024 Klara, Inc
+ 2019 Allan Jude
+ 2021, 2024 George Melikov
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zio_inject.c
+Copyright: 2005, 2010 Oracle and/or its affiliates
+ 2012, 2015 Delphix
+ 2017 Intel Corporation
+ 2024-2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zrlock.c
+Copyright: 2010 Oracle and/or its affiliates
+ 2014, 2015 Delphix
+ 2016 The MathWorks, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zthr.c
+Copyright: 2017, 2020 Delphix
+License: CDDL-1.0
+
+Files: src/openzfs/module/zfs/zvol.c
+Copyright: 2008-2010 Lawrence Livermore National Security, LLC
+ 2014 Nexenta Systems, Inc
+ 2016 Actifio, Inc
+ 2012, 2019 Delphix
+ 2024, 2025 Klara, Inc
+License: CDDL-1.0
+
+Files: src/openzfs/module/zstd/include/limits.h
+ src/openzfs/module/zstd/include/stdlib.h
+Copyright: 2014-2019 Allan Jude
+ 2020 Brian Behlendorf
+ 2020 Michael Niewöhner
+License: BSD-3-Clause
+
+Files: src/openzfs/module/zstd/include/zstd_compat_wrapper.h
+Copyright: 2020 Sebastian Gottschall
+License: BSD-3-Clause
+
+Files: src/openzfs/module/zstd/lib/common/allocations.h
+ src/openzfs/module/zstd/lib/common/bits.h
+ src/openzfs/module/zstd/lib/common/bitstream.h
+ src/openzfs/module/zstd/lib/common/compiler.h
+ src/openzfs/module/zstd/lib/common/cpu.h
+ src/openzfs/module/zstd/lib/common/debug.h
+ src/openzfs/module/zstd/lib/common/entropy_common.c
+ src/openzfs/module/zstd/lib/common/error_private.c
+ src/openzfs/module/zstd/lib/common/error_private.h
+ src/openzfs/module/zstd/lib/common/fse.h
+ src/openzfs/module/zstd/lib/common/fse_decompress.c
+ src/openzfs/module/zstd/lib/common/huf.h
+ src/openzfs/module/zstd/lib/common/mem.h
+ src/openzfs/module/zstd/lib/common/pool.c
+ src/openzfs/module/zstd/lib/common/pool.h
+ src/openzfs/module/zstd/lib/common/portability_macros.h
+ src/openzfs/module/zstd/lib/common/zstd_common.c
+ src/openzfs/module/zstd/lib/common/zstd_deps.h
+ src/openzfs/module/zstd/lib/common/zstd_internal.h
+ src/openzfs/module/zstd/lib/common/zstd_trace.h
+ src/openzfs/module/zstd/lib/compress/clevels.h
+ src/openzfs/module/zstd/lib/compress/fse_compress.c
+ src/openzfs/module/zstd/lib/compress/hist.c
+ src/openzfs/module/zstd/lib/compress/hist.h
+ src/openzfs/module/zstd/lib/compress/huf_compress.c
+ src/openzfs/module/zstd/lib/compress/zstd_compress.c
+ src/openzfs/module/zstd/lib/compress/zstd_compress_internal.h
+ src/openzfs/module/zstd/lib/compress/zstd_compress_literals.c
+ src/openzfs/module/zstd/lib/compress/zstd_compress_literals.h
+ src/openzfs/module/zstd/lib/compress/zstd_compress_sequences.c
+ src/openzfs/module/zstd/lib/compress/zstd_compress_sequences.h
+ src/openzfs/module/zstd/lib/compress/zstd_compress_superblock.c
+ src/openzfs/module/zstd/lib/compress/zstd_compress_superblock.h
+ src/openzfs/module/zstd/lib/compress/zstd_cwksp.h
+ src/openzfs/module/zstd/lib/compress/zstd_double_fast.c
+ src/openzfs/module/zstd/lib/compress/zstd_double_fast.h
+ src/openzfs/module/zstd/lib/compress/zstd_fast.c
+ src/openzfs/module/zstd/lib/compress/zstd_fast.h
+ src/openzfs/module/zstd/lib/compress/zstd_lazy.c
+ src/openzfs/module/zstd/lib/compress/zstd_lazy.h
+ src/openzfs/module/zstd/lib/compress/zstd_ldm.c
+ src/openzfs/module/zstd/lib/compress/zstd_ldm.h
+ src/openzfs/module/zstd/lib/compress/zstd_ldm_geartab.h
+ src/openzfs/module/zstd/lib/compress/zstd_opt.c
+ src/openzfs/module/zstd/lib/compress/zstd_opt.h
+ src/openzfs/module/zstd/lib/compress/zstd_preSplit.c
+ src/openzfs/module/zstd/lib/compress/zstd_preSplit.h
+ src/openzfs/module/zstd/lib/decompress/huf_decompress.c
+ src/openzfs/module/zstd/lib/decompress/zstd_ddict.c
+ src/openzfs/module/zstd/lib/decompress/zstd_ddict.h
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress.c
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress_block.c
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress_block.h
+ src/openzfs/module/zstd/lib/decompress/zstd_decompress_internal.h
+ src/openzfs/module/zstd/lib/zstd.h
+ src/openzfs/module/zstd/lib/zstd_errors.h
+Copyright: Meta Platforms, Inc. and affiliates
+License: BSD-3-Clause or GPL-2.0-only
+
+Files: src/openzfs/module/zstd/lib/common/xxhash.h
+Copyright: Yann Collet - Meta Platforms, Inc
+License: BSD-3-Clause or GPL-2.0-only
+
 Files: src/piecrypto/*
 Copyright: 2026 The piecrypto authors
 License: BSD-2-Clause
@@ -4408,6 +7344,7 @@ Files: xnu-overlay/SETUP/kextsymboltool/deterministic.py
  xnu-overlay/bsd/kern/kern_devmmap.c
  xnu-overlay/bsd/kern/kern_previous_panic.c
  xnu-overlay/bsd/pthread/pthread_builtin.c
+ xnu-overlay/bsd/vfs/vfs_zfs_builtin.c
  xnu-overlay/config/PIE.arm64.exports
  xnu-overlay/config/PIE.exports
  xnu-overlay/config/System.kext/PlugIns/PIE.kext/*
@@ -4432,6 +7369,18 @@ Files: xnu-overlay/SETUP/kextsymboltool/deterministic.py
  kexts/*
 Copyright: 2026 The Blueberry Pie OS Authors
 License: BSD-2-Clause
+
+Files: debian/build/libs/libzfs_kext/include/zfs_config.h
+ debian/build/libs/libzfs_kext/include/zfs_gitrev.h
+Copyright: 2008-2025 Brian Behlendorf
+ 2018 Antonio Russo
+ 2020 Kjeld Schouten-Lebbing
+ 2023-2025 Tony Hutter
+ 2024 Rob Norris
+ 2025-2026 Joergen Lundman
+ 2025 Achill Gilgenast
+ 2026 The Blueberry Pie OS Authors
+License: CDDL-1.0 AND BSD-2-Clause
 
 Files: xnu-overlay/bsd/vfs/vfs_hfs_builtin.c
 Copyright: 2015 Apple Inc.
@@ -4865,6 +7814,46 @@ Files: patches/0005-denylist-files-may-be-left-out.patch
 Copyright: Apple Inc.
  2026 The Blueberry Pie OS Authors
 License: APSL-2.0
+
+Files: patches/0006-openzfs-built-into-the-kernel.patch
+Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+ 2008 MacZFS
+ 2010 Sun Microsystems, Inc
+ 2005, 2010 Oracle and/or its affiliates
+ 2012, 2018 Delphix
+ 2012 Joyent, Inc
+ 2015 Chunwei Chen
+ 2017 Nexenta Systems, Inc
+ 2021, 2022 Pawel Jakub Dawidek
+ 2025 Rob Norris <robn@despairlabs.com>
+ 2025 Klara, Inc
+ 2007 Jeremy Teo
+ 2010 Robert Milkowski
+ 2017, 2021, 2023 Sean Doran <smd@use.net>
+ 2015 Evan Susarret
+ 2013-2020, 2023 Jorgen Lundman
+ 2013 Will Andrews <will@firepipe.net>
+ 2026 The Blueberry Pie OS Authors
+License: CDDL-1.0
+
+Files: patches/0007-openzfs-built-into-the-kernel.patch
+Copyright: 1986-1987, 1989 Carnegie-Mellon University
+ 1989-1991 Carnegie Mellon University
+ 1993-2026 Apple Inc.
+ 1982, 1986, 1989, 1991-1993 The Regents of the University of California
+ 1991-1995, 1997 NeXT Computer, Inc.
+ 1990-2025 Apple Computer, Inc.
+ 1982, 1986, 1988 Regents of the University of California
+ UNIX System Laboratories, Inc.
+ 2026 The Blueberry Pie OS Authors
+ 1987-1990, 1992, 1995 NeXT, Inc.
+ 1990 NeXT
+ 1994-1996 NeXT Software, Inc.
+ 2006 Sun Microsystems, Inc.
+ 2005-2006 SPARTA, Inc.
+ Daniel Boulet
+ 2021 Apple
+License: CMU-Mach AND LicenseRef-APSL-2.0-OS-reference AND BSD-4-Clause-UC AND APSL-2.0
 
 License: Apache-2.0
  Apache License
@@ -5922,125 +8911,390 @@ License: CDDL-1.0
  Distribution License 1.0. Its Source Code is available under that License
  from https://github.com/blueberrypieos/xnu.
  .
- COMMON DEVELOPMENT AND DISTRIBUTION LICENSE (CDDL)
- Version 1.0
+ Unless otherwise noted, all files in this distribution are released
+ under the Common Development and Distribution License (CDDL).
+ Exceptions are noted within the associated source files.
+ .
+ --------------------------------------------------------------------
+ .
+ .
+ COMMON DEVELOPMENT AND DISTRIBUTION LICENSE Version 1.0
  .
  1. Definitions.
  .
- 1.1. “Contributor” means each individual or entity that creates or contributes to the creation of Modifications.
+     1.1. "Contributor" means each individual or entity that creates
+          or contributes to the creation of Modifications.
  .
- 1.2. “Contributor Version” means the combination of the Original Software, prior Modifications used by a Contributor (if any), and the Modifications made by that particular Contributor.
+     1.2. "Contributor Version" means the combination of the Original
+          Software, prior Modifications used by a Contributor (if any),
+          and the Modifications made by that particular Contributor.
  .
- 1.3. “Covered Software” means (a) the Original Software, or (b) Modifications, or (c) the combination of files containing Original Software with files containing Modifications, in each case including portions thereof.
+     1.3. "Covered Software" means (a) the Original Software, or (b)
+          Modifications, or (c) the combination of files containing
+          Original Software with files containing Modifications, in
+          each case including portions thereof.
  .
- 1.4. “Executable” means the Covered Software in any form other than Source Code.
+     1.4. "Executable" means the Covered Software in any form other
+          than Source Code.
  .
- 1.5. “Initial Developer” means the individual or entity that first makes Original Software available under this License.
+     1.5. "Initial Developer" means the individual or entity that first
+          makes Original Software available under this License.
  .
- 1.6. “Larger Work” means a work which combines Covered Software or portions thereof with code not governed by the terms of this License.
+     1.6. "Larger Work" means a work which combines Covered Software or
+          portions thereof with code not governed by the terms of this
+          License.
  .
- 1.7. “License” means this document.
+     1.7. "License" means this document.
  .
- 1.8. “Licensable” means having the right to grant, to the maximum extent possible, whether at the time of the initial grant or subsequently acquired, any and all of the rights conveyed herein.
+     1.8. "Licensable" means having the right to grant, to the maximum
+          extent possible, whether at the time of the initial grant or
+          subsequently acquired, any and all of the rights conveyed
+          herein.
  .
- 1.9. “Modifications” means the Source Code and Executable form of any of the following:
+     1.9. "Modifications" means the Source Code and Executable form of
+          any of the following:
  .
-      A. Any file that results from an addition to, deletion from or modification of the contents of a file containing Original Software or previous Modifications;
+         A. Any file that results from an addition to, deletion from or
+            modification of the contents of a file containing Original
+            Software or previous Modifications;
  .
-      B. Any new file that contains any part of the Original Software or previous Modification; or
+         B. Any new file that contains any part of the Original
+            Software or previous Modifications; or
  .
-      C. Any new file that is contributed or otherwise made available under the terms of this License.
+         C. Any new file that is contributed or otherwise made
+            available under the terms of this License.
  .
- 1.10. “Original Software” means the Source Code and Executable form of computer software code that is originally released under this License.
+     1.10. "Original Software" means the Source Code and Executable
+           form of computer software code that is originally released
+           under this License.
  .
- 1.11. “Patent Claims” means any patent claim(s), now owned or hereafter acquired, including without limitation, method, process, and apparatus claims, in any patent Licensable by grantor.
+     1.11. "Patent Claims" means any patent claim(s), now owned or
+           hereafter acquired, including without limitation, method,
+           process, and apparatus claims, in any patent Licensable by
+           grantor.
  .
- 1.12. “Source Code” means (a) the common form of computer software code in which modifications are made and (b) associated documentation included in or with such code.
+     1.12. "Source Code" means (a) the common form of computer software
+           code in which modifications are made and (b) associated
+           documentation included in or with such code.
  .
- 1.13. “You” (or “Your”) means an individual or a legal entity exercising rights under, and complying with all of the terms of, this License. For legal entities, “You” includes any entity which controls, is controlled by, or is under common control with You. For purposes of this definition, “control” means (a) the power, direct or indirect, to cause the direction or management of such entity, whether by contract or otherwise, or (b) ownership of more than fifty percent (50%) of the outstanding shares or beneficial ownership of such entity.
+     1.13. "You" (or "Your") means an individual or a legal entity
+           exercising rights under, and complying with all of the terms
+           of, this License.  For legal entities, "You" includes any
+           entity which controls, is controlled by, or is under common
+           control with You.  For purposes of this definition,
+           "control" means (a) the power, direct or indirect, to cause
+           the direction or management of such entity, whether by
+           contract or otherwise, or (b) ownership of more than fifty
+           percent (50%) of the outstanding shares or beneficial
+           ownership of such entity.
  .
  2. License Grants.
  .
- 2.1. The Initial Developer Grant.
- Conditioned upon Your compliance with Section 3.1 below and subject to third party intellectual property claims, the Initial Developer hereby grants You a world-wide, royalty-free, non-exclusive license:
+     2.1. The Initial Developer Grant.
  .
-      (a) under intellectual property rights (other than patent or trademark) Licensable by Initial Developer, to use, reproduce, modify, display, perform, sublicense and distribute the Original Software (or portions thereof), with or without Modifications, and/or as part of a Larger Work; and
+     Conditioned upon Your compliance with Section 3.1 below and
+     subject to third party intellectual property claims, the Initial
+     Developer hereby grants You a world-wide, royalty-free,
+     non-exclusive license:
  .
-      (b) under Patent Claims infringed by the making, using or selling of Original Software, to make, have made, use, practice, sell, and offer for sale, and/or otherwise dispose of the Original Software (or portions thereof).
+         (a) under intellectual property rights (other than patent or
+             trademark) Licensable by Initial Developer, to use,
+             reproduce, modify, display, perform, sublicense and
+             distribute the Original Software (or portions thereof),
+             with or without Modifications, and/or as part of a Larger
+             Work; and
  .
-      (c) The licenses granted in Sections 2.1(a) and (b) are effective on the date Initial Developer first distributes or otherwise makes the Original Software available to a third party under the terms of this License.
+         (b) under Patent Claims infringed by the making, using or
+             selling of Original Software, to make, have made, use,
+             practice, sell, and offer for sale, and/or otherwise
+             dispose of the Original Software (or portions thereof).
  .
-      (d) Notwithstanding Section 2.1(b) above, no patent license is granted: (1) for code that You delete from the Original Software, or (2) for infringements caused by: (i) the modification of the Original Software, or (ii) the combination of the Original Software with other software or devices.
+         (c) The licenses granted in Sections 2.1(a) and (b) are
+             effective on the date Initial Developer first distributes
+             or otherwise makes the Original Software available to a
+             third party under the terms of this License.
  .
- 2.2. Contributor Grant.
- Conditioned upon Your compliance with Section 3.1 below and subject to third party intellectual property claims, each Contributor hereby grants You a world-wide, royalty-free, non-exclusive license:
+         (d) Notwithstanding Section 2.1(b) above, no patent license is
+             granted: (1) for code that You delete from the Original
+             Software, or (2) for infringements caused by: (i) the
+             modification of the Original Software, or (ii) the
+             combination of the Original Software with other software
+             or devices.
  .
-      (a) under intellectual property rights (other than patent or trademark) Licensable by Contributor to use, reproduce, modify, display, perform, sublicense and distribute the Modifications created by such Contributor (or portions thereof), either on an unmodified basis, with other Modifications, as Covered Software and/or as part of a Larger Work; and
+     2.2. Contributor Grant.
  .
-      (b) under Patent Claims infringed by the making, using, or selling of Modifications made by that Contributor either alone and/or in combination with its Contributor Version (or portions of such combination), to make, use, sell, offer for sale, have made, and/or otherwise dispose of: (1) Modifications made by that Contributor (or portions thereof); and (2) the combination of Modifications made by that Contributor with its Contributor Version (or portions of such combination).
+     Conditioned upon Your compliance with Section 3.1 below and
+     subject to third party intellectual property claims, each
+     Contributor hereby grants You a world-wide, royalty-free,
+     non-exclusive license:
  .
-      (c) The licenses granted in Sections 2.2(a) and 2.2(b) are effective on the date Contributor first distributes or otherwise makes the Modifications available to a third party.
+         (a) under intellectual property rights (other than patent or
+             trademark) Licensable by Contributor to use, reproduce,
+             modify, display, perform, sublicense and distribute the
+             Modifications created by such Contributor (or portions
+             thereof), either on an unmodified basis, with other
+             Modifications, as Covered Software and/or as part of a
+             Larger Work; and
  .
-      (d) Notwithstanding Section 2.2(b) above, no patent license is granted: (1) for any code that Contributor has deleted from the Contributor Version; (2) for infringements caused by: (i) third party modifications of Contributor Version, or (ii) the combination of Modifications made by that Contributor with other software (except as part of the Contributor Version) or other devices; or (3) under Patent Claims infringed by Covered Software in the absence of Modifications made by that Contributor.
+         (b) under Patent Claims infringed by the making, using, or
+             selling of Modifications made by that Contributor either
+             alone and/or in combination with its Contributor Version
+             (or portions of such combination), to make, use, sell,
+             offer for sale, have made, and/or otherwise dispose of:
+             (1) Modifications made by that Contributor (or portions
+             thereof); and (2) the combination of Modifications made by
+             that Contributor with its Contributor Version (or portions
+             of such combination).
+ .
+         (c) The licenses granted in Sections 2.2(a) and 2.2(b) are
+             effective on the date Contributor first distributes or
+             otherwise makes the Modifications available to a third
+             party.
+ .
+         (d) Notwithstanding Section 2.2(b) above, no patent license is
+             granted: (1) for any code that Contributor has deleted
+             from the Contributor Version; (2) for infringements caused
+             by: (i) third party modifications of Contributor Version,
+             or (ii) the combination of Modifications made by that
+             Contributor with other software (except as part of the
+             Contributor Version) or other devices; or (3) under Patent
+             Claims infringed by Covered Software in the absence of
+             Modifications made by that Contributor.
  .
  3. Distribution Obligations.
  .
- 3.1. Availability of Source Code.
- Any Covered Software that You distribute or otherwise make available in Executable form must also be made available in Source Code form and that Source Code form must be distributed only under the terms of this License. You must include a copy of this License with every copy of the Source Code form of the Covered Software You distribute or otherwise make available. You must inform recipients of any such Covered Software in Executable form as to how they can obtain such Covered Software in Source Code form in a reasonable manner on or through a medium customarily used for software exchange.
+     3.1. Availability of Source Code.
  .
- 3.2. Modifications.
- The Modifications that You create or to which You contribute are governed by the terms of this License. You represent that You believe Your Modifications are Your original creation(s) and/or You have sufficient rights to grant the rights conveyed by this License.
+     Any Covered Software that You distribute or otherwise make
+     available in Executable form must also be made available in Source
+     Code form and that Source Code form must be distributed only under
+     the terms of this License.  You must include a copy of this
+     License with every copy of the Source Code form of the Covered
+     Software You distribute or otherwise make available.  You must
+     inform recipients of any such Covered Software in Executable form
+     as to how they can obtain such Covered Software in Source Code
+     form in a reasonable manner on or through a medium customarily
+     used for software exchange.
  .
- 3.3. Required Notices.
- You must include a notice in each of Your Modifications that identifies You as the Contributor of the Modification. You may not remove or alter any copyright, patent or trademark notices contained within the Covered Software, or any notices of licensing or any descriptive text giving attribution to any Contributor or the Initial Developer.
+     3.2. Modifications.
  .
- 3.4. Application of Additional Terms.
- You may not offer or impose any terms on any Covered Software in Source Code form that alters or restricts the applicable version of this License or the recipients’ rights hereunder. You may choose to offer, and to charge a fee for, warranty, support, indemnity or liability obligations to one or more recipients of Covered Software. However, you may do so only on Your own behalf, and not on behalf of the Initial Developer or any Contributor. You must make it absolutely clear that any such warranty, support, indemnity or liability obligation is offered by You alone, and You hereby agree to indemnify the Initial Developer and every Contributor for any liability incurred by the Initial Developer or such Contributor as a result of warranty, support, indemnity or liability terms You offer.
+     The Modifications that You create or to which You contribute are
+     governed by the terms of this License.  You represent that You
+     believe Your Modifications are Your original creation(s) and/or
+     You have sufficient rights to grant the rights conveyed by this
+     License.
  .
- 3.5. Distribution of Executable Versions.
- You may distribute the Executable form of the Covered Software under the terms of this License or under the terms of a license of Your choice, which may contain terms different from this License, provided that You are in compliance with the terms of this License and that the license for the Executable form does not attempt to limit or alter the recipient’s rights in the Source Code form from the rights set forth in this License. If You distribute the Covered Software in Executable form under a different license, You must make it absolutely clear that any terms which differ from this License are offered by You alone, not by the Initial Developer or Contributor. You hereby agree to indemnify the Initial Developer and every Contributor for any liability incurred by the Initial Developer or such Contributor as a result of any such terms You offer.
+     3.3. Required Notices.
  .
- 3.6. Larger Works.
- You may create a Larger Work by combining Covered Software with other code not governed by the terms of this License and distribute the Larger Work as a single product. In such a case, You must make sure the requirements of this License are fulfilled for the Covered Software.
+     You must include a notice in each of Your Modifications that
+     identifies You as the Contributor of the Modification.  You may
+     not remove or alter any copyright, patent or trademark notices
+     contained within the Covered Software, or any notices of licensing
+     or any descriptive text giving attribution to any Contributor or
+     the Initial Developer.
+ .
+     3.4. Application of Additional Terms.
+ .
+     You may not offer or impose any terms on any Covered Software in
+     Source Code form that alters or restricts the applicable version
+     of this License or the recipients' rights hereunder.  You may
+     choose to offer, and to charge a fee for, warranty, support,
+     indemnity or liability obligations to one or more recipients of
+     Covered Software.  However, you may do so only on Your own behalf,
+     and not on behalf of the Initial Developer or any Contributor.
+     You must make it absolutely clear that any such warranty, support,
+     indemnity or liability obligation is offered by You alone, and You
+     hereby agree to indemnify the Initial Developer and every
+     Contributor for any liability incurred by the Initial Developer or
+     such Contributor as a result of warranty, support, indemnity or
+     liability terms You offer.
+ .
+     3.5. Distribution of Executable Versions.
+ .
+     You may distribute the Executable form of the Covered Software
+     under the terms of this License or under the terms of a license of
+     Your choice, which may contain terms different from this License,
+     provided that You are in compliance with the terms of this License
+     and that the license for the Executable form does not attempt to
+     limit or alter the recipient's rights in the Source Code form from
+     the rights set forth in this License.  If You distribute the
+     Covered Software in Executable form under a different license, You
+     must make it absolutely clear that any terms which differ from
+     this License are offered by You alone, not by the Initial
+     Developer or Contributor.  You hereby agree to indemnify the
+     Initial Developer and every Contributor for any liability incurred
+     by the Initial Developer or such Contributor as a result of any
+     such terms You offer.
+ .
+     3.6. Larger Works.
+ .
+     You may create a Larger Work by combining Covered Software with
+     other code not governed by the terms of this License and
+     distribute the Larger Work as a single product.  In such a case,
+     You must make sure the requirements of this License are fulfilled
+     for the Covered Software.
  .
  4. Versions of the License.
  .
- 4.1. New Versions.
- Sun Microsystems, Inc. is the initial license steward and may publish revised and/or new versions of this License from time to time. Each version will be given a distinguishing version number. Except as provided in Section 4.3, no one other than the license steward has the right to modify this License.
+     4.1. New Versions.
  .
- 4.2. Effect of New Versions.
- You may always continue to use, distribute or otherwise make the Covered Software available under the terms of the version of the License under which You originally received the Covered Software. If the Initial Developer includes a notice in the Original Software prohibiting it from being distributed or otherwise made available under any subsequent version of the License, You must distribute and make the Covered Software available under the terms of the version of the License under which You originally received the Covered Software. Otherwise, You may also choose to use, distribute or otherwise make the Covered Software available under the terms of any subsequent version of the License published by the license steward.
+     Sun Microsystems, Inc. is the initial license steward and may
+     publish revised and/or new versions of this License from time to
+     time.  Each version will be given a distinguishing version number.
+     Except as provided in Section 4.3, no one other than the license
+     steward has the right to modify this License.
  .
- 4.3. Modified Versions.
- When You are an Initial Developer and You want to create a new license for Your Original Software, You may create and use a modified version of this License if You: (a) rename the license and remove any references to the name of the license steward (except to note that the license differs from this License); and (b) otherwise make it clear that the license contains terms which differ from this License.
+     4.2. Effect of New Versions.
+ .
+     You may always continue to use, distribute or otherwise make the
+     Covered Software available under the terms of the version of the
+     License under which You originally received the Covered Software.
+     If the Initial Developer includes a notice in the Original
+     Software prohibiting it from being distributed or otherwise made
+     available under any subsequent version of the License, You must
+     distribute and make the Covered Software available under the terms
+     of the version of the License under which You originally received
+     the Covered Software.  Otherwise, You may also choose to use,
+     distribute or otherwise make the Covered Software available under
+     the terms of any subsequent version of the License published by
+     the license steward.
+ .
+     4.3. Modified Versions.
+ .
+     When You are an Initial Developer and You want to create a new
+     license for Your Original Software, You may create and use a
+     modified version of this License if You: (a) rename the license
+     and remove any references to the name of the license steward
+     (except to note that the license differs from this License); and
+     (b) otherwise make it clear that the license contains terms which
+     differ from this License.
  .
  5. DISCLAIMER OF WARRANTY.
  .
- COVERED SOFTWARE IS PROVIDED UNDER THIS LICENSE ON AN “AS IS” BASIS, WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED, INCLUDING, WITHOUT LIMITATION, WARRANTIES THAT THE COVERED SOFTWARE IS FREE OF DEFECTS, MERCHANTABLE, FIT FOR A PARTICULAR PURPOSE OR NON-INFRINGING. THE ENTIRE RISK AS TO THE QUALITY AND PERFORMANCE OF THE COVERED SOFTWARE IS WITH YOU. SHOULD ANY COVERED SOFTWARE PROVE DEFECTIVE IN ANY RESPECT, YOU (NOT THE INITIAL DEVELOPER OR ANY OTHER CONTRIBUTOR) ASSUME THE COST OF ANY NECESSARY SERVICING, REPAIR OR CORRECTION. THIS DISCLAIMER OF WARRANTY CONSTITUTES AN ESSENTIAL PART OF THIS LICENSE. NO USE OF ANY COVERED SOFTWARE IS AUTHORIZED HEREUNDER EXCEPT UNDER THIS DISCLAIMER.
+     COVERED SOFTWARE IS PROVIDED UNDER THIS LICENSE ON AN "AS IS"
+     BASIS, WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED OR IMPLIED,
+     INCLUDING, WITHOUT LIMITATION, WARRANTIES THAT THE COVERED
+     SOFTWARE IS FREE OF DEFECTS, MERCHANTABLE, FIT FOR A PARTICULAR
+     PURPOSE OR NON-INFRINGING.  THE ENTIRE RISK AS TO THE QUALITY AND
+     PERFORMANCE OF THE COVERED SOFTWARE IS WITH YOU.  SHOULD ANY
+     COVERED SOFTWARE PROVE DEFECTIVE IN ANY RESPECT, YOU (NOT THE
+     INITIAL DEVELOPER OR ANY OTHER CONTRIBUTOR) ASSUME THE COST OF ANY
+     NECESSARY SERVICING, REPAIR OR CORRECTION.  THIS DISCLAIMER OF
+     WARRANTY CONSTITUTES AN ESSENTIAL PART OF THIS LICENSE.  NO USE OF
+     ANY COVERED SOFTWARE IS AUTHORIZED HEREUNDER EXCEPT UNDER THIS
+     DISCLAIMER.
  .
  6. TERMINATION.
  .
- 6.1. This License and the rights granted hereunder will terminate automatically if You fail to comply with terms herein and fail to cure such breach within 30 days of becoming aware of the breach. Provisions which, by their nature, must remain in effect beyond the termination of this License shall survive.
+     6.1. This License and the rights granted hereunder will terminate
+     automatically if You fail to comply with terms herein and fail to
+     cure such breach within 30 days of becoming aware of the breach.
+     Provisions which, by their nature, must remain in effect beyond
+     the termination of this License shall survive.
  .
- 6.2. If You assert a patent infringement claim (excluding declaratory judgment actions) against Initial Developer or a Contributor (the Initial Developer or Contributor against whom You assert such claim is referred to as “Participant”) alleging that the Participant Software (meaning the Contributor Version where the Participant is a Contributor or the Original Software where the Participant is the Initial Developer) directly or indirectly infringes any patent, then any and all rights granted directly or indirectly to You by such Participant, the Initial Developer (if the Initial Developer is not the Participant) and all Contributors under Sections 2.1 and/or 2.2 of this License shall, upon 60 days notice from Participant terminate prospectively and automatically at the expiration of such 60 day notice period, unless if within such 60 day period You withdraw Your claim with respect to the Participant Software against such Participant either unilaterally or pursuant to a written agreement with Participant.
+     6.2. If You assert a patent infringement claim (excluding
+     declaratory judgment actions) against Initial Developer or a
+     Contributor (the Initial Developer or Contributor against whom You
+     assert such claim is referred to as "Participant") alleging that
+     the Participant Software (meaning the Contributor Version where
+     the Participant is a Contributor or the Original Software where
+     the Participant is the Initial Developer) directly or indirectly
+     infringes any patent, then any and all rights granted directly or
+     indirectly to You by such Participant, the Initial Developer (if
+     the Initial Developer is not the Participant) and all Contributors
+     under Sections 2.1 and/or 2.2 of this License shall, upon 60 days
+     notice from Participant terminate prospectively and automatically
+     at the expiration of such 60 day notice period, unless if within
+     such 60 day period You withdraw Your claim with respect to the
+     Participant Software against such Participant either unilaterally
+     or pursuant to a written agreement with Participant.
  .
- 6.3. In the event of termination under Sections 6.1 or 6.2 above, all end user licenses that have been validly granted by You or any distributor hereunder prior to termination (excluding licenses granted to You by any distributor) shall survive termination.
+     6.3. In the event of termination under Sections 6.1 or 6.2 above,
+     all end user licenses that have been validly granted by You or any
+     distributor hereunder prior to termination (excluding licenses
+     granted to You by any distributor) shall survive termination.
  .
  7. LIMITATION OF LIABILITY.
  .
- UNDER NO CIRCUMSTANCES AND UNDER NO LEGAL THEORY, WHETHER TORT (INCLUDING NEGLIGENCE), CONTRACT, OR OTHERWISE, SHALL YOU, THE INITIAL DEVELOPER, ANY OTHER CONTRIBUTOR, OR ANY DISTRIBUTOR OF COVERED SOFTWARE, OR ANY SUPPLIER OF ANY OF SUCH PARTIES, BE LIABLE TO ANY PERSON FOR ANY INDIRECT, SPECIAL, INCIDENTAL, OR CONSEQUENTIAL DAMAGES OF ANY CHARACTER INCLUDING, WITHOUT LIMITATION, DAMAGES FOR LOST PROFITS, LOSS OF GOODWILL, WORK STOPPAGE, COMPUTER FAILURE OR MALFUNCTION, OR ANY AND ALL OTHER COMMERCIAL DAMAGES OR LOSSES, EVEN IF SUCH PARTY SHALL HAVE BEEN INFORMED OF THE POSSIBILITY OF SUCH DAMAGES. THIS LIMITATION OF LIABILITY SHALL NOT APPLY TO LIABILITY FOR DEATH OR PERSONAL INJURY RESULTING FROM SUCH PARTY’S NEGLIGENCE TO THE EXTENT APPLICABLE LAW PROHIBITS SUCH LIMITATION. SOME JURISDICTIONS DO NOT ALLOW THE EXCLUSION OR LIMITATION OF INCIDENTAL OR CONSEQUENTIAL DAMAGES, SO THIS EXCLUSION AND LIMITATION MAY NOT APPLY TO YOU.
+     UNDER NO CIRCUMSTANCES AND UNDER NO LEGAL THEORY, WHETHER TORT
+     (INCLUDING NEGLIGENCE), CONTRACT, OR OTHERWISE, SHALL YOU, THE
+     INITIAL DEVELOPER, ANY OTHER CONTRIBUTOR, OR ANY DISTRIBUTOR OF
+     COVERED SOFTWARE, OR ANY SUPPLIER OF ANY OF SUCH PARTIES, BE
+     LIABLE TO ANY PERSON FOR ANY INDIRECT, SPECIAL, INCIDENTAL, OR
+     CONSEQUENTIAL DAMAGES OF ANY CHARACTER INCLUDING, WITHOUT
+     LIMITATION, DAMAGES FOR LOST PROFITS, LOSS OF GOODWILL, WORK
+     STOPPAGE, COMPUTER FAILURE OR MALFUNCTION, OR ANY AND ALL OTHER
+     COMMERCIAL DAMAGES OR LOSSES, EVEN IF SUCH PARTY SHALL HAVE BEEN
+     INFORMED OF THE POSSIBILITY OF SUCH DAMAGES.  THIS LIMITATION OF
+     LIABILITY SHALL NOT APPLY TO LIABILITY FOR DEATH OR PERSONAL
+     INJURY RESULTING FROM SUCH PARTY'S NEGLIGENCE TO THE EXTENT
+     APPLICABLE LAW PROHIBITS SUCH LIMITATION.  SOME JURISDICTIONS DO
+     NOT ALLOW THE EXCLUSION OR LIMITATION OF INCIDENTAL OR
+     CONSEQUENTIAL DAMAGES, SO THIS EXCLUSION AND LIMITATION MAY NOT
+     APPLY TO YOU.
  .
  8. U.S. GOVERNMENT END USERS.
  .
- The Covered Software is a “commercial item,” as that term is defined in 48 C.F.R. 2.101 (Oct. 1995), consisting of “commercial computer software” (as that term is defined at 48 C.F.R. § 252.227-7014(a)(1)) and “commercial computer software documentation” as such terms are used in 48 C.F.R. 12.212 (Sept. 1995). Consistent with 48 C.F.R. 12.212 and 48 C.F.R. 227.7202-1 through 227.7202-4 (June 1995), all U.S. Government End Users acquire Covered Software with only those rights set forth herein. This U.S. Government Rights clause is in lieu of, and supersedes, any other FAR, DFAR, or other clause or provision that addresses Government rights in computer software under this License.
+     The Covered Software is a "commercial item," as that term is
+     defined in 48 C.F.R. 2.101 (Oct. 1995), consisting of "commercial
+     computer software" (as that term is defined at 48
+     C.F.R. 252.227-7014(a)(1)) and "commercial computer software
+     documentation" as such terms are used in 48 C.F.R. 12.212
+     (Sept. 1995).  Consistent with 48 C.F.R. 12.212 and 48
+     C.F.R. 227.7202-1 through 227.7202-4 (June 1995), all
+     U.S. Government End Users acquire Covered Software with only those
+     rights set forth herein.  This U.S. Government Rights clause is in
+     lieu of, and supersedes, any other FAR, DFAR, or other clause or
+     provision that addresses Government rights in computer software
+     under this License.
  .
  9. MISCELLANEOUS.
  .
- This License represents the complete agreement concerning subject matter hereof. If any provision of this License is held to be unenforceable, such provision shall be reformed only to the extent necessary to make it enforceable. This License shall be governed by the law of the jurisdiction specified in a notice contained within the Original Software (except to the extent applicable law, if any, provides otherwise), excluding such jurisdiction’s conflict-of-law provisions. Any litigation relating to this License shall be subject to the jurisdiction of the courts located in the jurisdiction and venue specified in a notice contained within the Original Software, with the losing party responsible for costs, including, without limitation, court costs and reasonable attorneys’ fees and expenses. The application of the United Nations Convention on Contracts for the International Sale of Goods is expressly excluded. Any law or regulation which provides that the language of a contract shall be construed against the drafter shall not apply to this License. You agree that You alone are responsible for compliance with the United States export administration regulations (and the export control laws and regulation of any other countries) when You use, distribute or otherwise make available any Covered Software.
+     This License represents the complete agreement concerning subject
+     matter hereof.  If any provision of this License is held to be
+     unenforceable, such provision shall be reformed only to the extent
+     necessary to make it enforceable.  This License shall be governed
+     by the law of the jurisdiction specified in a notice contained
+     within the Original Software (except to the extent applicable law,
+     if any, provides otherwise), excluding such jurisdiction's
+     conflict-of-law provisions.  Any litigation relating to this
+     License shall be subject to the jurisdiction of the courts located
+     in the jurisdiction and venue specified in a notice contained
+     within the Original Software, with the losing party responsible
+     for costs, including, without limitation, court costs and
+     reasonable attorneys' fees and expenses.  The application of the
+     United Nations Convention on Contracts for the International Sale
+     of Goods is expressly excluded.  Any law or regulation which
+     provides that the language of a contract shall be construed
+     against the drafter shall not apply to this License.  You agree
+     that You alone are responsible for compliance with the United
+     States export administration regulations (and the export control
+     laws and regulation of any other countries) when You use,
+     distribute or otherwise make available any Covered Software.
  .
  10. RESPONSIBILITY FOR CLAIMS.
  .
- As between Initial Developer and the Contributors, each party is responsible for claims and damages arising, directly or indirectly, out of its utilization of rights under this License and You agree to work with Initial Developer and Contributors to distribute such responsibility on an equitable basis. Nothing herein is intended or shall be deemed to constitute any admission of liability.
+     As between Initial Developer and the Contributors, each party is
+     responsible for claims and damages arising, directly or
+     indirectly, out of its utilization of rights under this License
+     and You agree to work with Initial Developer and Contributors to
+     distribute such responsibility on an equitable basis.  Nothing
+     herein is intended or shall be deemed to constitute any admission
+     of liability.
+ .
+ --------------------------------------------------------------------
+ .
+ NOTICE PURSUANT TO SECTION 9 OF THE COMMON DEVELOPMENT AND
+ DISTRIBUTION LICENSE (CDDL)
+ .
+ For Covered Software in this distribution, this License shall
+ be governed by the laws of the State of California (excluding
+ conflict-of-law provisions).
+ .
+ Any litigation relating to this License shall be subject to the
+ jurisdiction of the Federal Courts of the Northern District of
+ California and the state courts of the State of California, with
+ venue lying in Santa Clara County, California.
 
 License: CMU-Mach
  Permission to use, copy, modify and distribute this software and its
@@ -6628,8 +9882,10 @@ License: NCSA
 License: public-domain
  The authors placed these files, or parts of them, in the public domain.
  Their notices say "This file is public domain.", "Public domain.", "is
- placed in the public domain", "It's in the public domain." and "This file
- is in the public domain." No licence is needed to use, copy, modify or
+ placed in the public domain", "It's in the public domain.", "This file
+ is in the public domain.", "This code is released to the public domain."
+ and "the author has dedicated all copyright and related and neighboring
+ rights to this software to the public domain worldwide." No licence is needed to use, copy, modify or
  distribute them.
 
 License: RSA-MD
@@ -7716,3 +10972,445 @@ License: LicenseRef-Steve-Summit
  long as this notice is incorporated.
  .
  Steve Summit 3/25/87
+
+License: GPL-2.0-only
+                     GNU GENERAL PUBLIC LICENSE
+                        Version 2, June 1991
+ .
+  Copyright (C) 1989, 1991 Free Software Foundation, Inc.,
+  51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
+  Everyone is permitted to copy and distribute verbatim copies
+  of this license document, but changing it is not allowed.
+ .
+                             Preamble
+ .
+   The licenses for most software are designed to take away your
+ freedom to share and change it.  By contrast, the GNU General Public
+ License is intended to guarantee your freedom to share and change free
+ software--to make sure the software is free for all its users.  This
+ General Public License applies to most of the Free Software
+ Foundation's software and to any other program whose authors commit to
+ using it.  (Some other Free Software Foundation software is covered by
+ the GNU Lesser General Public License instead.)  You can apply it to
+ your programs, too.
+ .
+   When we speak of free software, we are referring to freedom, not
+ price.  Our General Public Licenses are designed to make sure that you
+ have the freedom to distribute copies of free software (and charge for
+ this service if you wish), that you receive source code or can get it
+ if you want it, that you can change the software or use pieces of it
+ in new free programs; and that you know you can do these things.
+ .
+   To protect your rights, we need to make restrictions that forbid
+ anyone to deny you these rights or to ask you to surrender the rights.
+ These restrictions translate to certain responsibilities for you if you
+ distribute copies of the software, or if you modify it.
+ .
+   For example, if you distribute copies of such a program, whether
+ gratis or for a fee, you must give the recipients all the rights that
+ you have.  You must make sure that they, too, receive or can get the
+ source code.  And you must show them these terms so they know their
+ rights.
+ .
+   We protect your rights with two steps: (1) copyright the software, and
+ (2) offer you this license which gives you legal permission to copy,
+ distribute and/or modify the software.
+ .
+   Also, for each author's protection and ours, we want to make certain
+ that everyone understands that there is no warranty for this free
+ software.  If the software is modified by someone else and passed on, we
+ want its recipients to know that what they have is not the original, so
+ that any problems introduced by others will not reflect on the original
+ authors' reputations.
+ .
+   Finally, any free program is threatened constantly by software
+ patents.  We wish to avoid the danger that redistributors of a free
+ program will individually obtain patent licenses, in effect making the
+ program proprietary.  To prevent this, we have made it clear that any
+ patent must be licensed for everyone's free use or not licensed at all.
+ .
+   The precise terms and conditions for copying, distribution and
+ modification follow.
+ .
+                     GNU GENERAL PUBLIC LICENSE
+    TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+ .
+   0. This License applies to any program or other work which contains
+ a notice placed by the copyright holder saying it may be distributed
+ under the terms of this General Public License.  The "Program", below,
+ refers to any such program or work, and a "work based on the Program"
+ means either the Program or any derivative work under copyright law:
+ that is to say, a work containing the Program or a portion of it,
+ either verbatim or with modifications and/or translated into another
+ language.  (Hereinafter, translation is included without limitation in
+ the term "modification".)  Each licensee is addressed as "you".
+ .
+ Activities other than copying, distribution and modification are not
+ covered by this License; they are outside its scope.  The act of
+ running the Program is not restricted, and the output from the Program
+ is covered only if its contents constitute a work based on the
+ Program (independent of having been made by running the Program).
+ Whether that is true depends on what the Program does.
+ .
+   1. You may copy and distribute verbatim copies of the Program's
+ source code as you receive it, in any medium, provided that you
+ conspicuously and appropriately publish on each copy an appropriate
+ copyright notice and disclaimer of warranty; keep intact all the
+ notices that refer to this License and to the absence of any warranty;
+ and give any other recipients of the Program a copy of this License
+ along with the Program.
+ .
+ You may charge a fee for the physical act of transferring a copy, and
+ you may at your option offer warranty protection in exchange for a fee.
+ .
+   2. You may modify your copy or copies of the Program or any portion
+ of it, thus forming a work based on the Program, and copy and
+ distribute such modifications or work under the terms of Section 1
+ above, provided that you also meet all of these conditions:
+ .
+     a) You must cause the modified files to carry prominent notices
+     stating that you changed the files and the date of any change.
+ .
+     b) You must cause any work that you distribute or publish, that in
+     whole or in part contains or is derived from the Program or any
+     part thereof, to be licensed as a whole at no charge to all third
+     parties under the terms of this License.
+ .
+     c) If the modified program normally reads commands interactively
+     when run, you must cause it, when started running for such
+     interactive use in the most ordinary way, to print or display an
+     announcement including an appropriate copyright notice and a
+     notice that there is no warranty (or else, saying that you provide
+     a warranty) and that users may redistribute the program under
+     these conditions, and telling the user how to view a copy of this
+     License.  (Exception: if the Program itself is interactive but
+     does not normally print such an announcement, your work based on
+     the Program is not required to print an announcement.)
+ .
+ These requirements apply to the modified work as a whole.  If
+ identifiable sections of that work are not derived from the Program,
+ and can be reasonably considered independent and separate works in
+ themselves, then this License, and its terms, do not apply to those
+ sections when you distribute them as separate works.  But when you
+ distribute the same sections as part of a whole which is a work based
+ on the Program, the distribution of the whole must be on the terms of
+ this License, whose permissions for other licensees extend to the
+ entire whole, and thus to each and every part regardless of who wrote it.
+ .
+ Thus, it is not the intent of this section to claim rights or contest
+ your rights to work written entirely by you; rather, the intent is to
+ exercise the right to control the distribution of derivative or
+ collective works based on the Program.
+ .
+ In addition, mere aggregation of another work not based on the Program
+ with the Program (or with a work based on the Program) on a volume of
+ a storage or distribution medium does not bring the other work under
+ the scope of this License.
+ .
+   3. You may copy and distribute the Program (or a work based on it,
+ under Section 2) in object code or executable form under the terms of
+ Sections 1 and 2 above provided that you also do one of the following:
+ .
+     a) Accompany it with the complete corresponding machine-readable
+     source code, which must be distributed under the terms of Sections
+     1 and 2 above on a medium customarily used for software interchange; or,
+ .
+     b) Accompany it with a written offer, valid for at least three
+     years, to give any third party, for a charge no more than your
+     cost of physically performing source distribution, a complete
+     machine-readable copy of the corresponding source code, to be
+     distributed under the terms of Sections 1 and 2 above on a medium
+     customarily used for software interchange; or,
+ .
+     c) Accompany it with the information you received as to the offer
+     to distribute corresponding source code.  (This alternative is
+     allowed only for noncommercial distribution and only if you
+     received the program in object code or executable form with such
+     an offer, in accord with Subsection b above.)
+ .
+ The source code for a work means the preferred form of the work for
+ making modifications to it.  For an executable work, complete source
+ code means all the source code for all modules it contains, plus any
+ associated interface definition files, plus the scripts used to
+ control compilation and installation of the executable.  However, as a
+ special exception, the source code distributed need not include
+ anything that is normally distributed (in either source or binary
+ form) with the major components (compiler, kernel, and so on) of the
+ operating system on which the executable runs, unless that component
+ itself accompanies the executable.
+ .
+ If distribution of executable or object code is made by offering
+ access to copy from a designated place, then offering equivalent
+ access to copy the source code from the same place counts as
+ distribution of the source code, even though third parties are not
+ compelled to copy the source along with the object code.
+ .
+   4. You may not copy, modify, sublicense, or distribute the Program
+ except as expressly provided under this License.  Any attempt
+ otherwise to copy, modify, sublicense or distribute the Program is
+ void, and will automatically terminate your rights under this License.
+ However, parties who have received copies, or rights, from you under
+ this License will not have their licenses terminated so long as such
+ parties remain in full compliance.
+ .
+   5. You are not required to accept this License, since you have not
+ signed it.  However, nothing else grants you permission to modify or
+ distribute the Program or its derivative works.  These actions are
+ prohibited by law if you do not accept this License.  Therefore, by
+ modifying or distributing the Program (or any work based on the
+ Program), you indicate your acceptance of this License to do so, and
+ all its terms and conditions for copying, distributing or modifying
+ the Program or works based on it.
+ .
+   6. Each time you redistribute the Program (or any work based on the
+ Program), the recipient automatically receives a license from the
+ original licensor to copy, distribute or modify the Program subject to
+ these terms and conditions.  You may not impose any further
+ restrictions on the recipients' exercise of the rights granted herein.
+ You are not responsible for enforcing compliance by third parties to
+ this License.
+ .
+   7. If, as a consequence of a court judgment or allegation of patent
+ infringement or for any other reason (not limited to patent issues),
+ conditions are imposed on you (whether by court order, agreement or
+ otherwise) that contradict the conditions of this License, they do not
+ excuse you from the conditions of this License.  If you cannot
+ distribute so as to satisfy simultaneously your obligations under this
+ License and any other pertinent obligations, then as a consequence you
+ may not distribute the Program at all.  For example, if a patent
+ license would not permit royalty-free redistribution of the Program by
+ all those who receive copies directly or indirectly through you, then
+ the only way you could satisfy both it and this License would be to
+ refrain entirely from distribution of the Program.
+ .
+ If any portion of this section is held invalid or unenforceable under
+ any particular circumstance, the balance of the section is intended to
+ apply and the section as a whole is intended to apply in other
+ circumstances.
+ .
+ It is not the purpose of this section to induce you to infringe any
+ patents or other property right claims or to contest validity of any
+ such claims; this section has the sole purpose of protecting the
+ integrity of the free software distribution system, which is
+ implemented by public license practices.  Many people have made
+ generous contributions to the wide range of software distributed
+ through that system in reliance on consistent application of that
+ system; it is up to the author/donor to decide if he or she is willing
+ to distribute software through any other system and a licensee cannot
+ impose that choice.
+ .
+ This section is intended to make thoroughly clear what is believed to
+ be a consequence of the rest of this License.
+ .
+   8. If the distribution and/or use of the Program is restricted in
+ certain countries either by patents or by copyrighted interfaces, the
+ original copyright holder who places the Program under this License
+ may add an explicit geographical distribution limitation excluding
+ those countries, so that distribution is permitted only in or among
+ countries not thus excluded.  In such case, this License incorporates
+ the limitation as if written in the body of this License.
+ .
+   9. The Free Software Foundation may publish revised and/or new versions
+ of the General Public License from time to time.  Such new versions will
+ be similar in spirit to the present version, but may differ in detail to
+ address new problems or concerns.
+ .
+ Each version is given a distinguishing version number.  If the Program
+ specifies a version number of this License which applies to it and "any
+ later version", you have the option of following the terms and conditions
+ either of that version or of any later version published by the Free
+ Software Foundation.  If the Program does not specify a version number of
+ this License, you may choose any version ever published by the Free Software
+ Foundation.
+ .
+   10. If you wish to incorporate parts of the Program into other free
+ programs whose distribution conditions are different, write to the author
+ to ask for permission.  For software which is copyrighted by the Free
+ Software Foundation, write to the Free Software Foundation; we sometimes
+ make exceptions for this.  Our decision will be guided by the two goals
+ of preserving the free status of all derivatives of our free software and
+ of promoting the sharing and reuse of software generally.
+ .
+                             NO WARRANTY
+ .
+   11. BECAUSE THE PROGRAM IS LICENSED FREE OF CHARGE, THERE IS NO WARRANTY
+ FOR THE PROGRAM, TO THE EXTENT PERMITTED BY APPLICABLE LAW.  EXCEPT WHEN
+ OTHERWISE STATED IN WRITING THE COPYRIGHT HOLDERS AND/OR OTHER PARTIES
+ PROVIDE THE PROGRAM "AS IS" WITHOUT WARRANTY OF ANY KIND, EITHER EXPRESSED
+ OR IMPLIED, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+ MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE.  THE ENTIRE RISK AS
+ TO THE QUALITY AND PERFORMANCE OF THE PROGRAM IS WITH YOU.  SHOULD THE
+ PROGRAM PROVE DEFECTIVE, YOU ASSUME THE COST OF ALL NECESSARY SERVICING,
+ REPAIR OR CORRECTION.
+ .
+   12. IN NO EVENT UNLESS REQUIRED BY APPLICABLE LAW OR AGREED TO IN WRITING
+ WILL ANY COPYRIGHT HOLDER, OR ANY OTHER PARTY WHO MAY MODIFY AND/OR
+ REDISTRIBUTE THE PROGRAM AS PERMITTED ABOVE, BE LIABLE TO YOU FOR DAMAGES,
+ INCLUDING ANY GENERAL, SPECIAL, INCIDENTAL OR CONSEQUENTIAL DAMAGES ARISING
+ OUT OF THE USE OR INABILITY TO USE THE PROGRAM (INCLUDING BUT NOT LIMITED
+ TO LOSS OF DATA OR DATA BEING RENDERED INACCURATE OR LOSSES SUSTAINED BY
+ YOU OR THIRD PARTIES OR A FAILURE OF THE PROGRAM TO OPERATE WITH ANY OTHER
+ PROGRAMS), EVEN IF SUCH HOLDER OR OTHER PARTY HAS BEEN ADVISED OF THE
+ POSSIBILITY OF SUCH DAMAGES.
+ .
+                      END OF TERMS AND CONDITIONS
+ .
+             How to Apply These Terms to Your New Programs
+ .
+   If you develop a new program, and you want it to be of the greatest
+ possible use to the public, the best way to achieve this is to make it
+ free software which everyone can redistribute and change under these terms.
+ .
+   To do so, attach the following notices to the program.  It is safest
+ to attach them to the start of each source file to most effectively
+ convey the exclusion of warranty; and each file should have at least
+ the "copyright" line and a pointer to where the full notice is found.
+ .
+     <one line to give the program's name and a brief idea of what it does.>
+     Copyright (C) <year>  <name of author>
+ .
+     This program is free software; you can redistribute it and/or modify
+     it under the terms of the GNU General Public License as published by
+     the Free Software Foundation; either version 2 of the License, or
+     (at your option) any later version.
+ .
+     This program is distributed in the hope that it will be useful,
+     but WITHOUT ANY WARRANTY; without even the implied warranty of
+     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+     GNU General Public License for more details.
+ .
+     You should have received a copy of the GNU General Public License along
+     with this program; if not, write to the Free Software Foundation, Inc.,
+     51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+ .
+ Also add information on how to contact you by electronic and paper mail.
+ .
+ If the program is interactive, make it output a short notice like this
+ when it starts in an interactive mode:
+ .
+     Gnomovision version 69, Copyright (C) year name of author
+     Gnomovision comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+     This is free software, and you are welcome to redistribute it
+     under certain conditions; type `show c' for details.
+ .
+ The hypothetical commands `show w' and `show c' should show the appropriate
+ parts of the General Public License.  Of course, the commands you use may
+ be called something other than `show w' and `show c'; they could even be
+ mouse-clicks or menu items--whatever suits your program.
+ .
+ You should also get your employer (if you work as a programmer) or your
+ school, if any, to sign a "copyright disclaimer" for the program, if
+ necessary.  Here is a sample; alter the names:
+ .
+   Yoyodyne, Inc., hereby disclaims all copyright interest in the program
+   `Gnomovision' (which makes passes at compilers) written by James Hacker.
+ .
+   <signature of Ty Coon>, 1 April 1989
+   Ty Coon, President of Vice
+ .
+ This General Public License does not permit incorporating your program into
+ proprietary programs.  If your program is a subroutine library, you may
+ consider it more useful to permit linking proprietary applications with the
+ library.  If this is what you want to do, use the GNU Lesser General
+ Public License instead of this License.
+
+License: OpenSSL
+ Redistribution and use in source and binary forms, with or without
+ modification, are permitted provided that the following conditions
+ are met:
+ .
+ 1. Redistributions of source code must retain the above copyright
+    notice, this list of conditions and the following disclaimer.
+ .
+ 2. Redistributions in binary form must reproduce the above copyright
+    notice, this list of conditions and the following disclaimer in
+    the documentation and/or other materials provided with the
+    distribution.
+ .
+ 3. All advertising materials mentioning features or use of this
+    software must display the following acknowledgment:
+    "This product includes software developed by the OpenSSL Project
+    for use in the OpenSSL Toolkit. (http://www.openssl.org/)"
+ .
+ 4. The names "OpenSSL Toolkit" and "OpenSSL Project" must not be used to
+    endorse or promote products derived from this software without
+    prior written permission. For written permission, please contact
+    openssl-core@openssl.org.
+ .
+ 5. Products derived from this software may not be called "OpenSSL"
+    nor may "OpenSSL" appear in their names without prior written
+    permission of the OpenSSL Project.
+ .
+ 6. Redistributions of any form whatsoever must retain the following
+    acknowledgment:
+    "This product includes software developed by the OpenSSL Project
+    for use in the OpenSSL Toolkit (http://www.openssl.org/)"
+ .
+ THIS SOFTWARE IS PROVIDED BY THE OpenSSL PROJECT ``AS IS'' AND ANY
+ EXPRESSED OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE OpenSSL PROJECT OR
+ ITS CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+ SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+ NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+ LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+ OF THE POSSIBILITY OF SUCH DAMAGE.
+
+License: LicenseRef-OSF-HP-DEC-uuid
+ Copyright (c) 1990- 1993, 1996 Open Software Foundation, Inc.
+ Copyright (c) 1989 by Hewlett-Packard Company, Palo Alto, Ca. &
+ Digital Equipment Corporation, Maynard, Mass.  Copyright (c) 1998
+ Microsoft.  To anyone who acknowledges that this file is provided
+ "AS IS" without any express or implied warranty: permission to use,
+ copy, modify, and distribute this file for any purpose is hereby
+ granted without fee, provided that the above copyright notices and
+ this notice appears in all source code copies, and that none of the
+ names of Open Software Foundation, Inc., Hewlett-Packard Company,
+ or Digital Equipment Corporation be used in advertising or
+ publicity pertaining to distribution of the software without
+ specific, written prior permission.  Neither Open Software
+ Foundation, Inc., Hewlett-Packard Company, Microsoft, nor Digital
+ Equipment Corporation makes any representations about the
+ suitability of this software for any purpose.
+
+License: LicenseRef-Unicode-data-2006
+ COPYRIGHT AND PERMISSION NOTICE
+ .
+ Copyright (c) 1991-2006 Unicode, Inc. All rights reserved. Distributed under
+ the Terms of Use in http://www.unicode.org/copyright.html.
+ .
+ Permission is hereby granted, free of charge, to any person obtaining
+ a copy of the Unicode data files and any associated documentation (the
+ "Data Files") or Unicode software and any associated documentation (the
+ "Software") to deal in the Data Files or Software without restriction,
+ including without limitation the rights to use, copy, modify, merge,
+ publish, distribute, and/or sell copies of the Data Files or Software, and
+ to permit persons to whom the Data Files or Software are furnished to do so,
+ provided that (a) the above copyright notice(s) and this permission notice
+ appear with all copies of the Data Files or Software, (b) both the above
+ copyright notice(s) and this permission notice appear in associated
+ documentation, and (c) there is clear notice in each modified Data File or
+ in the Software as well as in the documentation associated with the Data
+ File(s) or Software that the data or software has been modified.
+ .
+ THE DATA FILES AND SOFTWARE ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY
+ KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT OF
+ THIRD PARTY RIGHTS. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR HOLDERS
+ INCLUDED IN THIS NOTICE BE LIABLE FOR ANY CLAIM, OR ANY SPECIAL INDIRECT OR
+ CONSEQUENTIAL DAMAGES, OR ANY DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE,
+ DATA OR PROFITS, WHETHER IN AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER
+ TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR PERFORMANCE
+ OF THE DATA FILES OR SOFTWARE.
+ .
+ Except as contained in this notice, the name of a copyright holder shall not
+ be used in advertising or otherwise to promote the sale, use or other
+ dealings in these Data Files or Software without prior written authorization
+ of the copyright holder.
+ .
+ Unicode and the Unicode logo are trademarks of Unicode, Inc., and may be
+ registered in some jurisdictions. All other trademarks and registered
+ trademarks mentioned herein are the property of their respective owners.

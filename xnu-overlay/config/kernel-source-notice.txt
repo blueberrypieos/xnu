@@ -1,1 +1,1 @@
-This kernel contains Covered Code under the Apple Public Source License 2.0. Its Source Code is available under that License from https://github.com/blueberrypieos/xnu.
+This kernel contains Covered Code under the Apple Public Source License 2.0, and Covered Software under the Common Development and Distribution License 1.0. The Source Code of both is available under those Licenses from https://github.com/blueberrypieos/xnu.

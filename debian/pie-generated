@@ -45,3 +45,5 @@ debian/build/kexts/Random/kextinfo.o
 debian/build/kexts/Serial/kextinfo.o
 debian/build/kexts/Thermal/kextinfo.o
 debian/build/kexts/Watchdog/kextinfo.o
+debian/build/libs/libzfs_kext/include/zfs_config.h
+debian/build/libs/libzfs_kext/include/zfs_gitrev.h

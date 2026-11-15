@@ -1,0 +1,150 @@
+Description: OpenZFS built into the kernel
+ CONFIG_BUILTIN_ZFS links libzfs_kext.a into the Pi kernels, as HFS is
+ linked in. ZFS starts from built-in IOKit personalities once IOBSD is
+ published, and bsd_init sizes its ARC first, in vfs_zfs_builtin.c.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-14
+
+diff --git a/xnu/bsd/conf/files b/xnu/bsd/conf/files
+index c4f26d3..77e7057 100644
+--- a/xnu/bsd/conf/files
++++ b/xnu/bsd/conf/files
+@@ -5,9 +5,11 @@
+ # the terms and conditions for use and redistribution.
+ #
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support.
++# Modified 2026-11-14: OpenZFS built into the kernel.
+ 
+ OPTIONS/config_macf			optional config_macf
+ OPTIONS/config_builtin_hfs		optional config_builtin_hfs
++OPTIONS/config_builtin_zfs		optional config_builtin_zfs
+ OPTIONS/config_rpi			optional config_rpi
+ OPTIONS/mach_assert			optional mach_assert
+ OPTIONS/mach_ldebug			optional mach_ldebug
+@@ -385,6 +387,7 @@ bsd/security/audit/audit_worker.c		optional config_audit
+ bsd/pthread/pthread_shims.c		standard
+ bsd/pthread/pthread_builtin.c	optional config_builtin_pthread
+ bsd/vfs/vfs_hfs_builtin.c		optional config_builtin_hfs
++bsd/vfs/vfs_zfs_builtin.c		optional config_builtin_zfs
+ bsd/pthread/pthread_priority.c		standard
+ bsd/pthread/pthread_workqueue.c		standard
+ 
+diff --git a/xnu/bsd/kern/bsd_init.c b/xnu/bsd/kern/bsd_init.c
+index 5c1f6ef..7295c64 100644
+--- a/xnu/bsd/kern/bsd_init.c
++++ b/xnu/bsd/kern/bsd_init.c
+@@ -65,6 +65,7 @@
+  *	@(#)init_main.c	8.16 (Berkeley) 5/14/95
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)). */
+ 
+ /*
+  *
+@@ -393,6 +394,10 @@ process_name(const char *s, proc_t p)
+ #if CONFIG_BUILTIN_HFS
+ extern void hfs_builtin_init(void);
+ #endif
++#include <config_builtin_zfs.h>
++#if CONFIG_BUILTIN_ZFS
++extern void zfs_builtin_init(void);
++#endif
+ struct rlimit vm_initial_limit_stack = { .rlim_cur = DFLSSIZ, .rlim_max = MAXSSIZ - PAGE_MAX_SIZE };
+ struct rlimit vm_initial_limit_data = { .rlim_cur = DFLDSIZ, .rlim_max = MAXDSIZ };
+ struct rlimit vm_initial_limit_core = { .rlim_cur = DFLCSIZ, .rlim_max = MAXCSIZ };
+@@ -711,6 +716,9 @@ bsd_init(void)
+ #if CONFIG_BUILTIN_HFS
+ 	hfs_builtin_init();
+ #endif
++#if CONFIG_BUILTIN_ZFS
++	zfs_builtin_init();
++#endif
+ 
+ #if CONFIG_PROC_UUID_POLICY
+ 	/* Initial proc_uuid_policy subsystem */
+diff --git a/xnu/config/MASTER b/xnu/config/MASTER
+index cbf6228..ba61e9a 100644
+--- a/xnu/config/MASTER
++++ b/xnu/config/MASTER
+@@ -6,6 +6,7 @@
+ # All rights reserved.  The CMU software License Agreement
+ # specifies the terms and conditions for use and redistribution.
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)).
+ # This file contains Original Code and/or Modifications of Original Code
+ # as defined in and that are subject to the Apple Public Source License
+ # Version 2.0 (the 'License'). You may not use this file except in
+@@ -350,6 +351,7 @@ options   CONFIG_RPI			# <config_rpi>
+ options   CONFIG_BUILTIN_PTHREAD		# <config_builtin_pthread>
+ options   CONFIG_BUILTIN_AMFI		# <config_builtin_amfi>
+ options   CONFIG_BUILTIN_HFS		# <config_builtin_hfs>
++options   CONFIG_BUILTIN_ZFS		# <config_builtin_zfs>
+ 
+ # support dynamic signing of code
+ #
+diff --git a/xnu/iokit/KernelConfigTables.cpp b/xnu/iokit/KernelConfigTables.cpp
+index c5a092f..ce8c5eb 100644
+--- a/xnu/iokit/KernelConfigTables.cpp
++++ b/xnu/iokit/KernelConfigTables.cpp
+@@ -26,6 +26,7 @@
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)). */
+ /*
+  * NOTICE: This file was modified by SPARTA, Inc. in 2005 to introduce
+  * support for mandatory and extensible security protections.  This notice
+@@ -105,6 +106,25 @@ const char * gIOKernelConfigTables =
+     "     'IOPropertyMatch' = { 'bInterfaceClass' = 3:32; };"
+     "   },"
+     "   {"
++    "     'IOClass'         = 'org_openzfsonosx_zfs_zvol';"
++    "     'IOProviderClass' = IOResources;"
++    "     'IOResourceMatch' = IOBSD;"
++    "     'IOMatchCategory' = 'org_openzfsonosx_zfs_zvol';"
++    "   },"
++    "   {"
++    "     'IOClass'         = ZFSDatasetProxy;"
++    "     'IOProviderClass' = ZFSPool;"
++    "     'IOMatchCategory' = ZFSPool;"
++    "     'IOProbeScore'    = 1000:32;"
++    "   },"
++    "   {"
++    "     'IOClass'         = ZFSDatasetScheme;"
++    "     'IOProviderClass' = IOMedia;"
++    "     'IOMatchCategory' = IOStorage;"
++    "     'IOProbeScore'    = 5000:32;"
++    "     'IOPropertyMatch' = { 'Whole' = .true.; };"
++    "   },"
++    "   {"
+     "     'IOClass'         = PIEBootUUID;"
+     "     'IOProviderClass' = IOResources;"
+     "     'IOResourceMatch' = 'boot-uuid';"
+diff --git a/xnu/makedefs/MakeInc.def b/xnu/makedefs/MakeInc.def
+index bf20fce..d372067 100644
+--- a/xnu/makedefs/MakeInc.def
++++ b/xnu/makedefs/MakeInc.def
+@@ -6,6 +6,7 @@
+ # linking, and installing files.
+ #
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)).
+ # This file contains Original Code and/or Modifications of Original Code
+ # as defined in and that are subject to the Apple Public Source License
+ # Version 2.0 (the 'License'). You may not use this file except in
+@@ -1217,8 +1218,13 @@ ifneq ($(wildcard $(SDKROOT)/usr/local/lib/kernel/libIOStorageFamily_kext.a),)
+ LD_KERNEL_ARCHIVES += -Wl,-force_load,$(SDKROOT)/usr/local/lib/kernel/libIOStorageFamily_kext.a
+ endif
+ endif
++ifneq ($(filter BCM2711 BCM2712,$(CURRENT_MACHINE_CONFIG)),)
++ifneq ($(wildcard $(SDKROOT)/usr/local/lib/kernel/libzfs_kext.a),)
++LD_KERNEL_ARCHIVES += -Wl,-force_load,$(SDKROOT)/usr/local/lib/kernel/libzfs_kext.a
++endif
++endif
+ LD_KERNEL_ARCHIVE_DEPS = $(wildcard $(addprefix $(SDKROOT)/usr/local/lib/kernel/, \
+-	libpthread_kext.a libhfs_kext.a libpiecrypto_kernel.a libIOStorageFamily_kext.a))
++	libpthread_kext.a libhfs_kext.a libpiecrypto_kernel.a libIOStorageFamily_kext.a libzfs_kext.a))
+ 
+ # Link binary support library
+ KERNEL_SUPPORT_LIB = $(KDKROOT)/System/Library/KernelSupport/lib$(CURRENT_MACHINE_CONFIG).os.$(CURRENT_KERNEL_CONFIG).a

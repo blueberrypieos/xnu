@@ -31,3 +31,5 @@ superfluous-file-pattern debian/build/*/IOUserBlockStorageDevice.h [debian/copyr
 superfluous-file-pattern debian/build/libs/cc_kext/arm64/profile_unsupported.o [debian/copyright:*]
 superfluous-file-pattern debian/build/root/usr/lib/blueberry-pie-os/kexts.early [debian/copyright:*]
 superfluous-file-pattern debian/build/*System*.kext/PlugIns/PIE.kext/Info.plist [debian/copyright:*]
+superfluous-file-pattern debian/build/libs/libzfs_kext/include/zfs_config.h [debian/copyright:*]
+superfluous-file-pattern debian/build/libs/libzfs_kext/include/zfs_gitrev.h [debian/copyright:*]

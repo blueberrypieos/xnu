@@ -7,6 +7,7 @@
 #include <libkern/libkern.h>
 #include <libkern/amfi/amfi.h>
 #include <sys/kauth.h>
+#include <sys/proc.h>
 
 #pragma mark Entitlements
 
@@ -99,8 +100,14 @@ builtin_queryEntitlementBooleanWithProc(const proc_t proc, const char *entitleme
 	kauth_cred_t cred;
 	uid_t uid;
 
-	if (proc == NULL || entitlement_name == NULL ||
-	    strcmp(entitlement_name, IDENTITYSVC_ENTITLEMENT) != 0) {
+	if (proc == NULL || entitlement_name == NULL) {
+		return KERN_NOT_FOUND;
+	}
+	if (strcmp(entitlement_name, "com.apple.private.vfs.pivot-root") == 0 ||
+	    strcmp(entitlement_name, "com.apple.private.vfs.system-volume-unmount") == 0) {
+		return proc_pid(proc) == 1 ? KERN_SUCCESS : KERN_NOT_FOUND;
+	}
+	if (strcmp(entitlement_name, IDENTITYSVC_ENTITLEMENT) != 0) {
 		return KERN_NOT_FOUND;
 	}
 	cred = kauth_cred_proc_ref(proc);

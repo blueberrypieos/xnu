@@ -1,0 +1,527 @@
+Description: OpenZFS built into the kernel
+ The kernel links OpenZFS in, as it does HFS. Built in, ZFS uses the
+ kernel's vnode_iocount and kauth_wellknown_guid and has no kmod entry
+ points. A read-only dataset passes the root check pivot_root makes, so
+ process 1 can switch to it. The SPL takes the machine headers, for arm64,
+ runs in 256 MiB, and sizes its first heap segment from the memory, so a
+ 1 GB board keeps most of its memory. Only zfs_boot= names the pool to
+ import for the root: rd= and rootdev= start no pool search, and a pool
+ without bootfs says so. Creating a dataset's proxy device needs the same
+ policy as removing it, and a dataset gets at most one, with one created
+ at a time. A write, a write through a mapping or a truncation by a user
+ without the privilege clears the set-user-ID and set-group-ID bits of an
+ executable file.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-15
+
+diff --git a/src/openzfs/include/os/macos/spl/sys/fcntl.h b/src/openzfs/include/os/macos/spl/sys/fcntl.h
+index 1a4d8fb547..10432350af 100644
+--- a/src/openzfs/include/os/macos/spl/sys/fcntl.h
++++ b/src/openzfs/include/os/macos/spl/sys/fcntl.h
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: the machine headers in place of the i386 ones, for arm64 (CDDL-1.0 section 3.3). */
+ 
+ /*
+  *
+@@ -32,7 +33,7 @@
+ #include <AvailabilityMacros.h>
+ #if !defined(MAC_OS_X_VERSION_10_9) ||	\
+ 	(MAC_OS_X_VERSION_MIN_REQUIRED <= MAC_OS_X_VERSION_10_9)
+-#include <i386/types.h>
++#include <machine/types.h>
+ #endif
+ 
+ #include_next <sys/fcntl.h>
+diff --git a/src/openzfs/include/os/macos/spl/sys/proc.h b/src/openzfs/include/os/macos/spl/sys/proc.h
+index 8d7971b489..9171972bc2 100644
+--- a/src/openzfs/include/os/macos/spl/sys/proc.h
++++ b/src/openzfs/include/os/macos/spl/sys/proc.h
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: the machine headers in place of the i386 ones, for arm64 (CDDL-1.0 section 3.3). */
+ 
+ /*
+  *
+@@ -29,7 +30,7 @@
+ #define	_SPL_PROC_H
+ 
+ #include <sys/ucred.h>
+-#include <i386/locks.h>
++#include <machine/locks.h>
+ #include_next <sys/proc.h>
+ #include <sys/kernel_types.h>
+ #include <sys/vnode.h>
+diff --git a/src/openzfs/include/os/macos/spl/sys/types.h b/src/openzfs/include/os/macos/spl/sys/types.h
+index 3b33458329..ede1449ea3 100644
+--- a/src/openzfs/include/os/macos/spl/sys/types.h
++++ b/src/openzfs/include/os/macos/spl/sys/types.h
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: the machine headers in place of the i386 ones, for arm64 (CDDL-1.0 section 3.3). */
+ 
+ /*
+  *
+@@ -61,8 +62,8 @@ typedef	short			index_t;
+ 
+ #if !defined(MAC_OS_X_VERSION_10_12) ||	\
+ 	(MAC_OS_X_VERSION_MIN_REQUIRED <= MAC_OS_X_VERSION_10_12)
+-#include <i386/types.h>
+-#include <i386/limits.h>
++#include <machine/types.h>
++#include <machine/limits.h>
+ #include <sys/_types/_ptrdiff_t.h>
+ #endif
+ 
+diff --git a/src/openzfs/include/sys/zfs_vnops.h b/src/openzfs/include/sys/zfs_vnops.h
+index 08cf0e2a6e..1dc5ab40d6 100644
+--- a/src/openzfs/include/sys/zfs_vnops.h
++++ b/src/openzfs/include/sys/zfs_vnops.h
+@@ -19,6 +19,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-15 by The Blueberry Pie OS Authors: declares zfs_clear_setid_bits_if_necessary (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2010, Oracle and/or its affiliates. All rights reserved.
+  * Copyright (c) 2025, Rob Norris <robn@despairlabs.com>
+@@ -34,6 +35,9 @@ extern int zfs_bclone_enabled;
+ extern int zfs_fsync(znode_t *, int, cred_t *);
+ extern int zfs_read(znode_t *, zfs_uio_t *, int, cred_t *);
+ extern int zfs_write(znode_t *, zfs_uio_t *, int, cred_t *);
++struct dmu_tx;
++extern void zfs_clear_setid_bits_if_necessary(zfsvfs_t *, znode_t *, cred_t *,
++    uint64_t *, struct dmu_tx *);
+ extern int zfs_holey(znode_t *, ulong_t, loff_t *);
+ extern int zfs_access(znode_t *, int, int, cred_t *);
+ extern int zfs_clone_range(znode_t *, uint64_t *, znode_t *, uint64_t *,
+diff --git a/src/openzfs/module/os/macos/spl/spl-policy.c b/src/openzfs/module/os/macos/spl/spl-policy.c
+index 6a743ac794..86299cc266 100644
+--- a/src/openzfs/module/os/macos/spl/spl-policy.c
++++ b/src/openzfs/module/os/macos/spl/spl-policy.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: a write by a user without the privilege clears the set-user-ID and set-group-ID bits (CDDL-1.0 section 3.3). */
+ #include <sys/cred.h>
+ #include <sys/policy.h>
+ #include <sys/priv.h>
+@@ -145,7 +146,7 @@ int
+ secpolicy_vnode_setid_retain(struct znode *zp, const cred_t *cr,
+     boolean_t issuidroot)
+ {
+-	return (0);
++	return (spl_priv_check_cred((kauth_cred_t)cr, PRIV_VFS_RETAINSUGID, 0));
+ }
+ 
+ int
+diff --git a/src/openzfs/module/os/macos/spl/spl-vmem.c b/src/openzfs/module/os/macos/spl/spl-vmem.c
+index 3dc2f77d14..8966e45b32 100644
+--- a/src/openzfs/module/os/macos/spl/spl-vmem.c
++++ b/src/openzfs/module/os/macos/spl/spl-vmem.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: 256 MiB of memory is enough, for 1 GB boards, and the first heap segment is a sixty-fourth of the memory, rounded down to a power of two, from 16 to 128 MiB (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright 2010 Sun Microsystems, Inc.  All rights reserved.
+  * Use is subject to license terms.
+@@ -3558,7 +3559,7 @@ vmem_init(const char *heap_name,
+ 	// create arenas for the VMEM_BUCKETS, id 2 - id 14
+ 
+ 	extern uint64_t real_total_memory;
+-	VERIFY3U(real_total_memory, >=, 1024ULL*1024ULL*1024ULL);
++	VERIFY3U(real_total_memory, >=, 256ULL*1024ULL*1024ULL);
+ 
+ 	/*
+ 	 * Minimum bucket span size, which is what we ask IOMallocAligned for.
+@@ -3633,7 +3634,10 @@ vmem_init(const char *heap_name,
+ 	 */
+ 
+ 	const size_t mib = 1024ULL * 1024ULL;
+-	const size_t resv_size = 128ULL * mib;
++	size_t resv_size = 128ULL * mib;
++
++	while (resv_size > 16ULL * mib && resv_size * 64 > real_total_memory)
++		resv_size /= 2;
+ 
+ 	dprintf("SPL: %s adding fixed allocation of %llu to the bucket_heap\n",
+ 	    __func__, (uint64_t)resv_size);
+diff --git a/src/openzfs/module/os/macos/spl/spl-vnode.c b/src/openzfs/module/os/macos/spl/spl-vnode.c
+index bd5a8e133c..519aa0020c 100644
+--- a/src/openzfs/module/os/macos/spl/spl-vnode.c
++++ b/src/openzfs/module/os/macos/spl/spl-vnode.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: built into the kernel, it uses the kernel's vnode_iocount (CDDL-1.0 section 3.3). */
+ 
+ /*
+  *
+@@ -451,6 +452,7 @@ spl_cache_purgevfs(mount_t mp, boolean_t reload)
+  * Sorry, but this is gross. But unable to find a way around it yet..
+  * Maybe one day Apple will allow it.
+  */
++#ifndef ZFS_BUILTIN
+ int
+ vnode_iocount(struct vnode *vp)
+ {
+@@ -460,6 +462,7 @@ vnode_iocount(struct vnode *vp)
+ 
+ 	return (binvp[25]);
+ }
++#endif
+ 
+ cred_t *
+ spl_kcred(void)
+diff --git a/src/openzfs/module/os/macos/zfs/ZFSDatasetScheme.cpp b/src/openzfs/module/os/macos/zfs/ZFSDatasetScheme.cpp
+index 14f145a891..5b469ea625 100644
+--- a/src/openzfs/module/os/macos/zfs/ZFSDatasetScheme.cpp
++++ b/src/openzfs/module/os/macos/zfs/ZFSDatasetScheme.cpp
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: one proxy device is created at a time, and a dataset gets at most one (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2015, Evan Susarret.  All rights reserved.
+  * Copyright (c) 2017, Jorgen Lundman.  All rights reserved.
+@@ -579,30 +580,45 @@ zfs_osx_proxy_remove(const char *osname)
+  * Return:
+  * 0 on success, or positive int on error.
+  */
++static volatile UInt32 zfs_osx_proxy_creating = 0;
++
+ int
+ zfs_osx_proxy_create(const char *osname)
+ {
+ 	ZFSDatasetScheme *provider = NULL;
++	ZFSDataset *existing;
++	int error = 0;
+ 
+ 	if (!osname || osname[0] == '\0') {
+ 		dprintf("missing dataset argument");
+ 		return (EINVAL);
+ 	}
+ 
++	if (!OSCompareAndSwap(0, 1, &zfs_osx_proxy_creating))
++		return (EBUSY);
++
++	existing = zfs_osx_proxy_get(osname);
++	if (existing != NULL) {
++		existing->release();
++		error = EEXIST;
++		goto out;
++	}
++
+ 	provider = zfs_osx_proxy_scheme_by_osname(osname);
+ 	if (provider == NULL) {
+ 		dprintf("can't get pool proxy");
+-		return (ENOENT);
++		error = ENOENT;
++		goto out;
+ 	}
+ 
+ 	if (provider->addDataset(osname) == false) {
+ 		dprintf("couldn't add dataset");
+-		provider->release();
+-		return (ENXIO);
++		error = ENXIO;
+ 	}
+-
+ 	provider->release();
+-	return (0);
++out:
++	OSCompareAndSwap(1, 0, &zfs_osx_proxy_creating);
++	return (error);
+ }
+ 
+ } /* extern "C" */
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_boot.cpp b/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
+index 799953c964..f1c15c6c7e 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
++++ b/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: only zfs_boot= names the pool to import for the root, not rd= or rootdev=, and a pool without bootfs says so (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2015, Evan Susarret.  All rights reserved.
+  */
+@@ -1491,7 +1492,7 @@ zfs_boot_publish_bootfs(IOService *zfs_hl, pool_list_t *pools)
+ 	}
+ 	if (bootfs == 0) {
+ 		spa_namespace_exit(FTAG);
+-		dprintf("%s no bootfs, nothing to do\n", __func__);
++		printf("%s: pool %s has no bootfs\n", __func__, pools->pool_name);
+ 		kmem_free(zfs_bootfs, len);
+ 		return (0);
+ 	}
+@@ -2030,25 +2031,6 @@ zfs_boot_check_mountroot(char **pool_name, uint64_t *pool_guid)
+ 
+ 	result = (result && (zfs_boot != 0) && strlen(zfs_boot) > 0);
+ 
+-	if (!result) {
+-		result = PE_parse_boot_argn("rd", zfs_boot,
+-		    MAXPATHLEN);
+-		result = (result && (zfs_boot != 0) &&
+-		    strlen(zfs_boot) > 0 &&
+-		    strncmp(zfs_boot, "zfs:", 4));
+-		// dprintf("Raw rd: [%llu] {%s}\n",
+-		//    (uint64_t)strlen(zfs_boot), zfs_boot );
+-	}
+-	if (!result) {
+-		result = PE_parse_boot_argn("rootdev", zfs_boot,
+-		    MAXPATHLEN);
+-		result = (result && (zfs_boot != 0) &&
+-		    strlen(zfs_boot) > 0 &&
+-		    strncmp(zfs_boot, "zfs:", 4));
+-		// dprintf("Raw rootdev: [%llu] {%s}\n",
+-		//    (uint64_t)strlen(zfs_boot), zfs_boot );
+-	}
+-
+ 	/*
+ 	 * XXX To Do - parse zpool_guid boot arg
+ 	 */
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c b/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
+index 54978f8fa1..8285e69349 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
++++ b/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: creating a dataset's proxy device needs the same policy as removing it (CDDL-1.0 section 3.3). */
+ 
+ /*
+  * Copyright (c) 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+@@ -219,12 +220,6 @@ out:
+ #include <sys/ZFSDatasetScheme.h>
+ 
+ 
+-static int
+-zfs_secpolicy_os_none(zfs_cmd_t *zc, nvlist_t *innvl, cred_t *cr)
+-{
+-	return (0);
+-}
+-
+ static const zfs_ioc_key_t zfs_keys_proxy_dataset[] = {
+ 	{ZPOOL_CONFIG_POOL_NAME,	DATA_TYPE_STRING,	0},
+ };
+@@ -286,7 +281,7 @@ zfs_ioctl_init_os(void)
+ {
+ 	/* APPLE Specific ioctls */
+ 	zfs_ioctl_register("proxy_dataset", ZFS_IOC_PROXY_DATASET,
+-	    zfs_ioc_osx_proxy_dataset, zfs_secpolicy_os_none,
++	    zfs_ioc_osx_proxy_dataset, zfs_secpolicy_config,
+ 	    NO_NAME, POOL_CHECK_NONE,
+ 	    B_FALSE, B_FALSE, zfs_keys_proxy_dataset,
+ 	    ARRAY_SIZE(zfs_keys_proxy_dataset));
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_osx.cpp b/src/openzfs/module/os/macos/zfs/zfs_osx.cpp
+index 390a3b3359..2aca21cb0f 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_osx.cpp
++++ b/src/openzfs/module/os/macos/zfs/zfs_osx.cpp
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: built into the kernel, it has no kmod entry points (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2013-2020, Jorgen Lundman.  All rights reserved.
+  */
+@@ -74,6 +75,7 @@ SYSCTL_STRING(_zfs, OID_AUTO, kext_version,
+     spl_gitrev, 0, "ZFS KEXT Version");
+ 
+ 
++#ifndef ZFS_BUILTIN
+ extern kern_return_t _start(kmod_info_t *ki, void *data);
+ extern kern_return_t _stop(kmod_info_t *ki, void *data);
+ 
+@@ -82,6 +84,7 @@ __attribute__((visibility("default"))) KMOD_EXPLICIT_DECL(org.openzfsonosx.zfs,
+ kmod_start_func_t *_realmain = 0;
+ kmod_stop_func_t  *_antimain = 0;
+ int _kext_apple_cc = __APPLE_CC__;
++#endif
+ 
+ } // Extern "C"
+ 
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c b/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
+index 474427ba00..d0a8b2c454 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
++++ b/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-15 by The Blueberry Pie OS Authors: truncation by a user without the privilege clears the set-user-ID and set-group-ID bits of an executable file (CDDL-1.0 section 3.3). */
+ 
+ /*
+  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+@@ -2131,6 +2132,26 @@ zfs_setattr(znode_t *zp, vattr_t *vap, int flags, cred_t *cr,
+ 		 * should be addressed in openat().
+ 		 */
+ 		/* XXX - would it be OK to generate a log record here? */
++		if ((zp->z_mode & (S_ISUID | S_ISGID)) != 0 &&
++		    (zp->z_mode & (S_IXUSR | S_IXGRP | S_IXOTH)) != 0 &&
++		    secpolicy_vnode_setid_retain(zp, cr, B_FALSE) != 0) {
++			uint64_t setid_txg = 0;
++			tx = dmu_tx_create(zfsvfs->z_os);
++			dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
++			zfs_sa_upgrade_txholds(tx, zp);
++			if (vap->va_size < zp->z_size)
++				dmu_tx_mark_netfree(tx);
++			err = dmu_tx_assign(tx, DMU_TX_WAIT);
++			if (err) {
++				dmu_tx_abort(tx);
++				zfs_exit(zfsvfs, FTAG);
++				return (err);
++			}
++			zfs_clear_setid_bits_if_necessary(zfsvfs, zp, cr,
++			    &setid_txg, tx);
++			dmu_tx_commit(tx);
++			tx = NULL;
++		}
+ 		err = zfs_freesp(zp, vap->va_size, 0, 0, FALSE);
+ 		if (err) {
+ 			zfs_exit(zfsvfs, FTAG);
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c b/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
+index aec782e35b..8a8ebf0a73 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
++++ b/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
+@@ -18,6 +18,8 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: a read-only dataset passes the kernel's root check that pivot_root makes (CDDL-1.0 section 3.3). */
++/* Modified 2026-11-15 by The Blueberry Pie OS Authors: a write through a mapping by a user without the privilege clears the set-user-ID and set-group-ID bits of an executable file (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2013 Will Andrews <will@firepipe.net>
+  * Copyright (c) 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+@@ -54,6 +56,9 @@
+ #include <sys/ioccom.h>
+ #include <sys/zfs_dir.h>
+ #include <sys/zfs_ioctl.h>
++#if defined(ZFS_BUILTIN) && !defined(FSIOC_KERNEL_ROOTAUTH)
++#define	FSIOC_KERNEL_ROOTAUTH	_IOW('h', 51, uint32_t)
++#endif
+ #include <sys/fs/zfs.h>
+ #include <sys/dmu.h>
+ #include <sys/dmu_objset.h>
+@@ -637,6 +642,12 @@ zfs_vnop_ioctl(struct vnop_ioctl_args *ap)
+ 			/* Required by Spotlight search */
+ 			break;
+ 
++#if defined(ZFS_BUILTIN)
++		case FSIOC_KERNEL_ROOTAUTH:
++			error = (ap->a_data == NULL && vfs_isrdonly(zfsvfs->z_vfs)) ? 0 : EPERM;
++			break;
++#endif
++
+ #ifdef FSIOC_FIOSEEKHOLE
+ 		case FSIOC_FIOSEEKHOLE:
+ 		case FSCTL_FIOSEEKHOLE:
+@@ -2534,7 +2545,7 @@ zfs_vnop_pagein(struct vnop_pagein_args *ap)
+ 
+ static int
+ zfs_pageout(zfsvfs_t *zfsvfs, znode_t *zp, upl_t upl, vm_offset_t upl_offset,
+-    offset_t off, size_t size, int flags)
++    offset_t off, size_t size, int flags, cred_t *cr)
+ {
+ 	dmu_tx_t *tx;
+ 	zfs_locked_range_t *lr;
+@@ -2710,6 +2721,11 @@ top:
+ 		zfs_tstamp_update_setup(zp, CONTENT_MODIFIED, mtime, ctime);
+ 		err = sa_bulk_update(zp->z_sa_hdl, bulk, count, tx);
+ 		ASSERT0(err);
++		if (cr != NULL) {
++			uint64_t setid_txg = 0;
++			zfs_clear_setid_bits_if_necessary(zfsvfs, zp, cr,
++			    &setid_txg, tx);
++		}
+ 		zfs_log_write(zfsvfs->z_log, tx, TX_WRITE, zp, off, len, 0,
+ 		    B_FALSE, NULL, NULL);
+ 	}
+@@ -2780,7 +2796,8 @@ zfs_vnop_pageout(struct vnop_pageout_args *ap)
+ 	 * Break up that function into smaller bits so it can be reused.
+ 	 */
+ 	error = zfs_pageout(zfsvfs, zp, upl, upl_offset, ap->a_f_offset,
+-	    len, flags);
++	    len, flags, ap->a_context ?
++	    (cred_t *)vfs_context_ucred(ap->a_context) : NULL);
+ 
+ 	return (error);
+ }
+@@ -3151,6 +3168,13 @@ zfs_vnop_pageoutv2(struct vnop_pageout_args *ap)
+ 		 * data is copied into the log record now, instead of being
+ 		 * fetched later through zfs_get_data() and the rangelock.
+ 		 */
++		if (ap->a_context != NULL && z_sa_hdl != NULL &&
++		    vfs_context_ucred(ap->a_context) != NULL) {
++			uint64_t setid_txg = 0;
++			zfs_clear_setid_bits_if_necessary(zfsvfs, zp,
++			    (cred_t *)vfs_context_ucred(ap->a_context),
++			    &setid_txg, tx);
++		}
+ 		zfs_log_write(zfsvfs->z_log, tx, TX_WRITE, zp, ap->a_f_offset,
+ 		    a_size, (a_flags & UPL_IOSYNC) ? B_TRUE : B_FALSE, B_FALSE,
+ 		    NULL, NULL);
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_vnops_osx_lib.c b/src/openzfs/module/os/macos/zfs/zfs_vnops_osx_lib.c
+index 6e7292992d..d74f25b21f 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_vnops_osx_lib.c
++++ b/src/openzfs/module/os/macos/zfs/zfs_vnops_osx_lib.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-14 by The Blueberry Pie OS Authors: built into the kernel, it uses the kernel's kauth_wellknown_guid (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2013 Will Andrews <will@firepipe.net>
+  * Copyright (c) 2013, 2020 Jorgen Lundman <lundman@lundman.net>
+@@ -1655,6 +1656,7 @@ static unsigned char fingerprint[] = {0xab, 0xcd, 0xef, 0xab, 0xcd, 0xef,
+ /*
+  * Convert "Well Known" GUID to enum type.
+  */
++#ifndef ZFS_BUILTIN
+ int
+ kauth_wellknown_guid(guid_t *guid)
+ {
+@@ -1678,6 +1680,7 @@ kauth_wellknown_guid(guid_t *guid)
+ 
+ 	return (KAUTH_WKG_NOT);
+ }
++#endif
+ 
+ 
+ /*
+diff --git a/src/openzfs/module/zfs/zfs_vnops.c b/src/openzfs/module/zfs/zfs_vnops.c
+index 8d11656383..e76e13d072 100644
+--- a/src/openzfs/module/zfs/zfs_vnops.c
++++ b/src/openzfs/module/zfs/zfs_vnops.c
+@@ -19,6 +19,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-15 by The Blueberry Pie OS Authors: zfs_clear_setid_bits_if_necessary is not static, for the paging and truncation paths (CDDL-1.0 section 3.3). */
+ 
+ /*
+  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+@@ -549,7 +550,7 @@ out:
+ 	return (error);
+ }
+ 
+-static void
++void
+ zfs_clear_setid_bits_if_necessary(zfsvfs_t *zfsvfs, znode_t *zp, cred_t *cr,
+     uint64_t *clear_setid_bits_txgp, dmu_tx_t *tx)
+ {

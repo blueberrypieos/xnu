@@ -1,3 +1,15 @@
+xnu (12377.121.6+pie4) blueberry-pie-os; urgency=medium
+
+  * ZFS is built into the kernel: OpenZFS 2.4.1, which mounts a pool's
+    boot dataset as the root with zfs_boot=POOL in the boot-args.
+  * The ARC's maximum is a quarter of the memory and its minimum 64 MiB
+    by default; zfs_arc_max= and zfs_arc_min= in the boot-args set other
+    sizes, within the limits ZFS accepts.
+  * Process 1 may switch the root with pivot_root(2) and unmount the old
+    root, for a restart of user space on another root.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Sat, 14 Nov 2026 21:44:23 +0000
+
 xnu (12377.121.6+pie3) blueberry-pie-os; urgency=medium
 
   * pie_watchdog_boot=N in the boot-args: the kernel panics unless user

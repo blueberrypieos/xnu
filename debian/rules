@@ -13,7 +13,7 @@ EXT  := System/Library/Extensions
 DEV  := usr/lib/blueberry-pie-os/kernel
 SOCS := bcm2711 bcm2712
 T    := $(CURDIR)/debian/build/tree
-PATCHED := IONetworkingFamily IOSerialFamily msdosfs
+PATCHED := IONetworkingFamily IOSerialFamily msdosfs openzfs
 
 export PIE_SDKROOT        := $(KSDK)
 export PIE_KERNEL_SOURCES := $(T)/src
@@ -52,6 +52,7 @@ install:
 	$(K)/build-hfs-kext.sh
 	$(K)/build-piecrypto-kext.sh
 	$(K)/build-iostorage-kext.sh
+	JOBS=$(JOBS) debian/build-zfs.sh
 	set -e; for soc in $(SOCS); do \
 		SOC=$$(echo $$soc | tr a-z A-Z); \
 		PIE_REPRO_OBJROOT=$(KB)/$$soc/obj $(XNU_MAKE) KERNEL_CONFIGS=DEVELOPMENT MACHINE_CONFIGS=$$SOC BUILD_DSYM=0 \

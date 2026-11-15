@@ -34,3 +34,6 @@
 [submodule "src/pieboot"]
 	path = src/pieboot
 	url = https://github.com/blueberrypieos/pieboot.git
+[submodule "src/openzfs"]
+	path = src/openzfs
+	url = https://github.com/openzfsonosx/openzfs-fork.git
