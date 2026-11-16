@@ -6201,6 +6201,7 @@ Copyright: 2009, 2010 Jørn Amundsen <jorn.amundsen@ntnu.no>
 License: CDDL-1.0
 
 Files: src/openzfs/module/icp/algs/modes/gcm.c
+ patches/0005a-openzfs-ghashv8-match-generic.patch
 Copyright: 2008, 2010 Oracle and/or its affiliates
 License: CDDL-1.0
 
@@ -7839,7 +7840,7 @@ Files: patches/0006-openzfs-built-into-the-kernel.patch
 Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
  2008 MacZFS
  2010 Sun Microsystems, Inc
- 2005, 2010 Oracle and/or its affiliates
+ 2005, 2008, 2010 Oracle and/or its affiliates
  2012, 2015, 2018 Delphix
  2012 Joyent, Inc
  2015 Chunwei Chen
@@ -7854,6 +7855,13 @@ Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
  2015 Evan Susarret
  2013-2020, 2023 Jorgen Lundman
  2013 Will Andrews <will@firepipe.net>
+ 2008, 2010, 2019 Brian Behlendorf
+ 2013 Michael Kjorling
+ 2016 Romain Dolbeau
+ 2019 Matthew Macy
+ 2022 Tino Reichardt
+ 2024 Shengqi Chen
+ 2025-2026 Joergen Lundman
  2026 The Blueberry Pie OS Authors
 License: CDDL-1.0
 

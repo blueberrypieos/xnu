@@ -11,10 +11,15 @@ Description: OpenZFS built into the kernel
  at a time. A write, a write through a mapping or a truncation by a user
  without the privilege clears the set-user-ID and set-group-ID bits of an
  executable file. The root mount names its dataset as the mount's source,
- so the root dataset shows as mounted.
+ so the root dataset shows as mounted. The PMULL check reads the AES
+ field of the instruction set register, where PMULL is reported. The
+ fork's GHASH fix, patch 0005a, makes the ARMv8 GHASH give the generic
+ GHASH's tags. It is the fastest where the CPU has PMULL. The fastest
+ choice tests HAVE_AESV8, as the rest of gcm.c does, not HAVE_ARMV8,
+ which nothing defines.
 Author: The Blueberry Pie OS Authors
 Forwarded: not-needed
-Last-Update: 2026-11-15
+Last-Update: 2026-11-16
 
 diff --git a/src/openzfs/include/os/macos/spl/sys/fcntl.h b/src/openzfs/include/os/macos/spl/sys/fcntl.h
 index 1a4d8fb547..10432350af 100644
@@ -58,6 +63,27 @@ index 8d7971b489..9171972bc2 100644
  #include_next <sys/proc.h>
  #include <sys/kernel_types.h>
  #include <sys/vnode.h>
+diff --git a/src/openzfs/include/os/macos/spl/sys/simd_aarch64.h b/src/openzfs/include/os/macos/spl/sys/simd_aarch64.h
+index 9a69025239..5926ceb92c 100644
+--- a/src/openzfs/include/os/macos/spl/sys/simd_aarch64.h
++++ b/src/openzfs/include/os/macos/spl/sys/simd_aarch64.h
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: PMULL support is read from the AES field, not the SHA1 field (CDDL-1.0 section 3.3). */
+ 
+ /*
+  * SIMD support:
+@@ -98,7 +99,7 @@ zfs_pmull_available(void)
+ {
+ 	uint64_t ftr;
+ 	get_ftr(ID_AA64ISAR0_EL1, ftr);
+-	return ((ftr >> 8) & 0xf);
++	return (((ftr >> 4) & 0xf) >= 2);
+ }
+ 
+ #endif /* _MACOS_SIMD_AARCH64_H */
 diff --git a/src/openzfs/include/os/macos/spl/sys/types.h b/src/openzfs/include/os/macos/spl/sys/types.h
 index 3b33458329..ede1449ea3 100644
 --- a/src/openzfs/include/os/macos/spl/sys/types.h
@@ -103,6 +129,27 @@ index 08cf0e2a6e..1dc5ab40d6 100644
  extern int zfs_holey(znode_t *, ulong_t, loff_t *);
  extern int zfs_access(znode_t *, int, int, cred_t *);
  extern int zfs_clone_range(znode_t *, uint64_t *, znode_t *, uint64_t *,
+diff --git a/src/openzfs/module/icp/algs/modes/gcm.c b/src/openzfs/module/icp/algs/modes/gcm.c
+index d43386b76b..5e33b8a461 100644
+--- a/src/openzfs/module/icp/algs/modes/gcm.c
++++ b/src/openzfs/module/icp/algs/modes/gcm.c
+@@ -19,6 +19,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: the ARMv8 GHASH is the fastest where the CPU has PMULL (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+  */
+@@ -922,7 +923,7 @@ gcm_impl_init(void)
+ 	 * Set the fastest implementation given the assumption that the
+ 	 * hardware accelerated version is the fastest.
+ 	 */
+-#if defined(__aarch64__) && defined(HAVE_ARMV8)
++#if defined(__aarch64__) && defined(HAVE_AESV8)
+ 	if (gcm_ghashv8_impl.is_supported()) {
+ 		memcpy(&gcm_fastest_impl, &gcm_ghashv8_impl,
+ 		    sizeof (gcm_fastest_impl));
 diff --git a/src/openzfs/module/os/macos/spl/spl-policy.c b/src/openzfs/module/os/macos/spl/spl-policy.c
 index 6a743ac794..86299cc266 100644
 --- a/src/openzfs/module/os/macos/spl/spl-policy.c
@@ -358,6 +405,7 @@ index 390a3b3359..2aca21cb0f 100644
  } // Extern "C"
  
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
+index 840b10fba4..2aa43160e0 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
 +++ b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
 @@ -18,6 +18,7 @@
@@ -368,17 +416,17 @@ diff --git a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c b/src/openzfs/module/o
  /*
   * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
   * Copyright (c) 2011 Pawel Jakub Dawidek <pawel@dawidek.net>.
-@@ -1323,6 +1324,8 @@
- 
+@@ -1324,6 +1325,8 @@ zfs_vfs_mountroot(struct mount *mp, struct vnode *devvp, vfs_context_t ctx)
  	/* Set this mount to read-only */
  	zfsvfs->z_rdonly = 1;
-+
-+	vfs_mountedfrom(mp, zfs_bootfs);
  
++	vfs_mountedfrom(mp, zfs_bootfs);
++
  	/*
  	 * Due to XNU mount flags, readonly gets set off for a short
+ 	 * while, which means mimic will kick in if enabled. But we need
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c b/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
-index 474427ba00..d0a8b2c454 100644
+index 474427ba00..afc996b304 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
 +++ b/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
 @@ -18,6 +18,7 @@
@@ -417,7 +465,7 @@ index 474427ba00..d0a8b2c454 100644
  		if (err) {
  			zfs_exit(zfsvfs, FTAG);
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c b/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
-index aec782e35b..8a8ebf0a73 100644
+index aec782e35b..9532328944 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
 +++ b/src/openzfs/module/os/macos/zfs/zfs_vnops_osx.c
 @@ -18,6 +18,8 @@

@@ -13,6 +13,8 @@ xnu (12377.121.6+pie4) blueberry-pie-os; urgency=medium
     mount's source.
   * The postinst updates the boot partition only when rpi-firmware's
     blueberry-pie-os-update-boot is installed.
+  * ZFS encryption uses the PMULL instructions for GCM where the CPU has
+    them, as the Pi 5's does.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Sat, 14 Nov 2026 21:44:23 +0000
 
