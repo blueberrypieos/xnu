@@ -7,6 +7,12 @@ xnu (12377.121.6+pie4) blueberry-pie-os; urgency=medium
     sizes, within the limits ZFS accepts.
   * Process 1 may switch the root with pivot_root(2) and unmount the old
     root, for a restart of user space on another root.
+  * The kernel package provides pie-zfs-abi (= 2.4), the ZFS interface the
+    zfs tools need.
+  * A pool's boot dataset mounted as the root names the dataset as the
+    mount's source.
+  * The postinst updates the boot partition only when rpi-firmware's
+    blueberry-pie-os-update-boot is installed.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Sat, 14 Nov 2026 21:44:23 +0000
 

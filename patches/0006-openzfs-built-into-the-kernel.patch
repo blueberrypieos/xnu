@@ -10,7 +10,8 @@ Description: OpenZFS built into the kernel
  policy as removing it, and a dataset gets at most one, with one created
  at a time. A write, a write through a mapping or a truncation by a user
  without the privilege clears the set-user-ID and set-group-ID bits of an
- executable file.
+ executable file. The root mount names its dataset as the mount's source,
+ so the root dataset shows as mounted.
 Author: The Blueberry Pie OS Authors
 Forwarded: not-needed
 Last-Update: 2026-11-15
@@ -356,6 +357,26 @@ index 390a3b3359..2aca21cb0f 100644
  
  } // Extern "C"
  
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
+--- a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
++++ b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-15 by The Blueberry Pie OS Authors: the root mount names its dataset as the mount's source (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+  * Copyright (c) 2011 Pawel Jakub Dawidek <pawel@dawidek.net>.
+@@ -1323,6 +1324,8 @@
+ 
+ 	/* Set this mount to read-only */
+ 	zfsvfs->z_rdonly = 1;
++
++	vfs_mountedfrom(mp, zfs_bootfs);
+ 
+ 	/*
+ 	 * Due to XNU mount flags, readonly gets set off for a short
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c b/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
 index 474427ba00..d0a8b2c454 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
