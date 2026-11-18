@@ -1,0 +1,61 @@
+Description: a copy out of a map with larger pages is cut to the target pages
+ vm_map_copyout of a copy made from a 16K-page user map into the 4K-page
+ kernel map mapped the 16K-rounded range. The receiver frees the data with
+ vm_deallocate, which covers only the 4K-rounded range, so the rest of the
+ last page stayed mapped and kept the sender's memory alive. A copy made of
+ map entries whose data ends short of a 16K page, such as a kext_request's
+ mkext, leaked the whole buffer; small copies go through a kernel buffer and
+ did not. The copy's entries are now cut to the data rounded to the
+ destination's pages before they are mapped.
+Author: The Blueberry Pie OS Authors
+Forwarded: no
+Last-Update: 2026-11-17
+
+--- a/xnu/osfmk/vm/vm_map.c
++++ b/xnu/osfmk/vm/vm_map.c
+@@ -26,6 +26,7 @@
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-17: a copy out of a map with larger pages is cut to the destination map's pages, so vm_deallocate() of the data frees all of it (APSL 2.0 section 2.2(b)). */
+ /*
+  * @OSF_COPYRIGHT@
+  */
+@@ -319,6 +320,12 @@
+ #endif
+ 	boolean_t       consume_on_success);
+ 
++static void             vm_map_copy_trim(
++	vm_map_copy_t   copy_map,
++	uint16_t        new_page_shift,
++	vm_map_offset_t trim_start,
++	vm_map_offset_t trim_end);
++
+ static void             vm_map_fork_share(
+ 	vm_map_lock_ctx_t old_ctx,
+ 	vm_map_entry_t    old_entry,
+@@ -10880,6 +10887,24 @@
+ 			copy = target_copy;
+ 		}
+ 		copy_size = copy->size;
++		if (consume_on_success &&
++		    VM_MAP_COPY_PAGE_SHIFT(copy) > VM_MAP_PAGE_SHIFT(dst_map)) {
++			vm_map_offset_t first, last, start, end;
++			uint16_t        dst_page_shift = (uint16_t)VM_MAP_PAGE_SHIFT(dst_map);
++
++			first = vm_map_copy_first_entry(copy)->vme_start;
++			last = vm_map_copy_last_entry(copy)->vme_end;
++			start = vm_map_trunc_page(copy->offset, VM_MAP_PAGE_MASK(dst_map));
++			end = vm_map_round_page(copy->offset + copy_size, VM_MAP_PAGE_MASK(dst_map));
++			if (end < last) {
++				vm_map_copy_trim(copy, dst_page_shift, end - first, last - first);
++			}
++			if (start > first) {
++				vm_map_copy_trim(copy, dst_page_shift, 0, start - first);
++			}
++			copy->size = copy_size;
++			copy->cpy_hdr.page_shift = dst_page_shift;
++		}
+ 	}
+ 
+ 	/*

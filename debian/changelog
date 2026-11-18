@@ -1,3 +1,43 @@
+xnu (12377.121.6+pie6) blueberry-pie-os; urgency=medium
+
+  * A pool on file vdevs opens: a file's attributes now include its type.
+  * File vdevs are closed on unmount only while the system shuts down. A
+    dataset unmount closed them under I/O, which gave read errors.
+  * A zvol's I/O runs on the zvol taskqs and reports its errors. A pool on
+    a zvol of another pool hung under writes and at import, and a failed
+    zvol read or write reported success.
+  * A remount does not make a dataset writable while its readonly property
+    is on, so a read-only root stays read-only.
+  * A remount that names another dataset than the one mounted is refused.
+    It renamed the mount's source to that dataset.
+  * A remount holds the file system's teardown lock as a reader, so a
+    rollback or receive cannot replace the dataset under it.
+  * A rollback or receive no longer purges the name cache while it holds
+    the file system's teardown lock, where a vnode reclaim could deadlock.
+  * A last zvol close that waited for the suspend lock keeps it, and an
+    open or close that retries does not release a suspend lock it gave up.
+  * blueberry-pie-os-kernel-dev installs the headers of /usr/local/include
+    in /usr/include. A ZFS root keeps /usr/local on its data sets, where
+    dpkg installs nothing.
+  * The kernel maps the watchdog's registers at every boot. Its first try
+    could come before their addresses were known. It then left running
+    the watchdog that pieboot arms for a fallback boot, which reset the
+    board about 16 s into the boot.
+  * When the kernel cannot read the firmware's revision, it still sets or
+    disarms a watchdog that pieboot armed. So does the watchdog driver. A
+    failed map of the watchdog's registers is tried again.
+  * A firmware call made before the mailbox is ready no longer leaks its
+    message buffer.
+  * The root pool imports from a card that held a larger pool before it
+    was written again. The boot import read the whole disk too, found the
+    old pool's labels at the card's end and took them for the new pool's.
+  * On the Pi 4, whose kernel has smaller pages than user space, data a
+    process passed to the kernel is freed again. Its last page stayed
+    mapped in the kernel and kept the whole buffer, so every kext load
+    leaked it, about 4 MB at each soft reboot.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Mon, 16 Nov 2026 18:28:11 +0000
+
 xnu (12377.121.6+pie4) blueberry-pie-os; urgency=medium
 
   * ZFS is built into the kernel: OpenZFS 2.4.1, which mounts a pool's

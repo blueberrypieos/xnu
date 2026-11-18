@@ -7841,7 +7841,7 @@ Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
  2008 MacZFS
  2010 Sun Microsystems, Inc
  2005, 2008, 2010 Oracle and/or its affiliates
- 2012, 2015, 2018 Delphix
+ 2011-2012, 2015-2016, 2018 Delphix
  2012 Joyent, Inc
  2015 Chunwei Chen
  2016-2017 Nexenta Systems, Inc
@@ -7853,7 +7853,7 @@ Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
  2010 Robert Milkowski
  2017, 2021, 2023 Sean Doran <smd@use.net>
  2015 Evan Susarret
- 2013-2020, 2023 Jorgen Lundman
+ 2013-2020, 2023, 2025 Jorgen Lundman
  2013 Will Andrews <will@firepipe.net>
  2008, 2010, 2019 Brian Behlendorf
  2013 Michael Kjorling
@@ -7883,6 +7883,12 @@ Copyright: 1986-1987, 1989 Carnegie-Mellon University
  Daniel Boulet
  2021 Apple
 License: CMU-Mach AND LicenseRef-APSL-2.0-OS-reference AND BSD-4-Clause-UC AND APSL-2.0
+
+Files: patches/0008-vm-map-copyout-larger-pages.patch
+Copyright: 2000-2021 Apple Inc.
+ 1987-1991 Carnegie Mellon University
+ 2026 The Blueberry Pie OS Authors
+License: LicenseRef-APSL-2.0-OS-reference AND CMU-Mach
 
 License: Apache-2.0
                                   Apache License

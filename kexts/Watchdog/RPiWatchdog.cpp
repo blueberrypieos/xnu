@@ -30,9 +30,11 @@
  * the machine at once. QEMU is told apart as PIEThermal does it, by the
  * firmware's revision (QEMU's mailbox gives 346337 on every machine; the
  * VideoCore's is its build time, 2019 or later on these SoCs), and the
- * watchdog is not armed there unless hw.watchdog.enabled is set. The
- * boot-arg pie_watchdog=0 leaves it unarmed on a Pi, and disarms one the
- * bootloader armed (the EEPROM's BOOT_WATCHDOG_TIMEOUT).
+ * watchdog is not armed there unless hw.watchdog.enabled is set. One
+ * found armed is a Pi's whatever the revision, since QEMU's would have
+ * reset the machine. The boot-arg pie_watchdog=0 leaves it unarmed on a
+ * Pi, and disarms one the bootloader armed (the EEPROM's
+ * BOOT_WATCHDOG_TIMEOUT).
  *
  * User space checks in through IOWatchDogTimer: an administrator
  * sets the service's properties to a number of seconds N
@@ -207,6 +209,11 @@ RPiWatchdog::start(IOService *provider)
 
 	fGate->runActionBlock(^IOReturn {
 		uint32_t rstc = rd(PM_RSTC), wdog = rd(PM_WDOG);
+		if (fQEMU && (rstc & PM_RSTC_WRCFG) == PM_RSTC_WRCFG_FULL_RESET) {
+			IOLog("RPiWatchdog: firmware revision check failed (%u), but the watchdog is armed, so not QEMU's\n",
+			    revision);
+			fQEMU = false;
+		}
 		if (fQEMU) {
 			IOLog("RPiWatchdog: firmware revision %u is not the VideoCore's (QEMU's: 346337, whose model "
 			    "resets at once when armed); not armed\n", revision);

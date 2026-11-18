@@ -77,8 +77,11 @@ decide(void)
 	if (sMap == NULL) {
 		sMap = sNub->mapDeviceMemoryWithIndex(0, kIOMapInhibitCache);
 		if (sMap == NULL || sMap->getLength() < PM_REGS_SIZE) {
-			IOLog("RPiWatchdog: cannot map the PM block; the kernel does not arm it\n");
 			OSSafeReleaseNULL(sMap);
+			if (++sTries < kFirmwareTries) {
+				return false;
+			}
+			IOLog("RPiWatchdog: cannot map the PM block; the kernel does not arm it\n");
 			return true;
 		}
 		os_atomic_store(&sRegs, (volatile uint32_t *)sMap->getVirtualAddress(), release);
@@ -93,9 +96,12 @@ decide(void)
 		return false;
 	}
 	if (ret != kIOReturnSuccess || revision < FW_VIDEOCORE_SINCE) {
-		IOLog("RPiWatchdog: firmware revision %u is not the VideoCore's (QEMU's: 346337, whose model "
-		    "resets at once when armed); the kernel does not arm it\n", revision);
-		return true;
+		if (!hardwareArmed()) {
+			IOLog("RPiWatchdog: firmware revision %u is not the VideoCore's (QEMU's: 346337, whose model "
+			    "resets at once when armed); the kernel does not arm it\n", revision);
+			return true;
+		}
+		IOLog("RPiWatchdog: firmware revision check failed (0x%x, %u), but the boot loader armed it\n", ret, revision);
 	}
 	uint32_t bootArg = 1;
 	PE_parse_boot_argn("pie_watchdog", &bootArg, sizeof(bootArg));

@@ -241,11 +241,16 @@ RPiPublishDTChildren(IOService *parent, IORegistryEntry *dtNode)
 			}
 			if (nub->init(entry, gIODTPlane)) {
 				nub->attach(parent);
+				bool mbox = IODTMatchNubWithKeys(nub, "'brcm,bcm2835-mbox'");
+				bool pm = IODTMatchNubWithKeys(nub, "('brcm,bcm2835-pm-wdt', 'brcm,bcm2711-pm', 'brcm,bcm2712-pm')");
+				if (mbox || pm) {
+					nub->getResources();
+				}
 				nub->registerService();
-				if (IODTMatchNubWithKeys(nub, "'brcm,bcm2835-mbox'")) {
+				if (mbox) {
 					RPiIO::logFirmware();
 				}
-				if (IODTMatchNubWithKeys(nub, "('brcm,bcm2835-pm-wdt', 'brcm,bcm2711-pm', 'brcm,bcm2712-pm')")) {
+				if (pm) {
 					rpi_watchdog_early_start(nub);
 				}
 			}
@@ -387,8 +392,10 @@ RPiFirmwareProperty(uint32_t tag, void *data, uint32_t length)
 	IOLockLock(lock);
 	if (regsMap == NULL) {
 		IOService *mbox = IOService::copyMatchingService(IOService::nameMatching("brcm,bcm2835-mbox"));
-		msgMem = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-		    kIODirectionInOut | kIOMemoryPhysicallyContiguous, 4096, 0x3ffff000ULL);
+		if (msgMem == NULL) {
+			msgMem = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+			    kIODirectionInOut | kIOMemoryPhysicallyContiguous, 4096, 0x3ffff000ULL);
+		}
 		uint64_t bus = 0;
 		if (mbox != NULL && msgMem != NULL &&
 		    RPiDMAAddress(mbox, msgMem->getPhysicalSegment(0, NULL, kIOMemoryMapperNone), &bus) &&

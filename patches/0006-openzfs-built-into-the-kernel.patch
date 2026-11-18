@@ -16,10 +16,32 @@ Description: OpenZFS built into the kernel
  fork's GHASH fix, patch 0005a, makes the ARMv8 GHASH give the generic
  GHASH's tags. It is the fastest where the CPU has PMULL. The fastest
  choice tests HAVE_AESV8, as the rest of gcm.c does, not HAVE_ARMV8,
- which nothing defines.
+ which nothing defines. A file's attributes include its type, so a file
+ vdev opens as a regular file, and file vdevs are closed on unmount only
+ while the system shuts down, not under I/O. A zvol's I/O from IOKit runs
+ on the zvol taskqs, completes asynchronously and reports its errors, so
+ a pool on a zvol does not hold the disk threads the zvol's own pool
+ needs. The last close refuses new I/O and waits for the I/O queued, and
+ a cache flush waits for the I/O queued before it. The zvol device node's
+ open and close no longer take the zvol's state lock twice. A remount
+ does not make a dataset writable while its readonly property is on, or
+ when the property cannot be read. A remount must name the dataset that
+ is mounted, and keeps the mount's source: one naming another dataset
+ renamed the mount. A remount holds the teardown lock as a reader, so a
+ rollback or receive cannot swap the objset under it. The snapdir
+ callback purges the name cache only when the value changes, and not
+ while a rollback or receive holds the teardown lock as a writer, where a
+ vnode reclaim it starts could deadlock. A
+ last zvol close that waited for the suspend lock keeps it, and a retry
+ does not count a suspend lock it gave up. The root pool's search probes
+ only leaf media, and a whole disk only once its matching has settled,
+ so the old labels at the end of a card written again are not taken for
+ the pool.
+ A whole disk that has not settled is probed again later and does not
+ hold up the import, and each pass frees its list of pool configs.
 Author: The Blueberry Pie OS Authors
 Forwarded: not-needed
-Last-Update: 2026-11-16
+Last-Update: 2026-11-17
 
 diff --git a/src/openzfs/include/os/macos/spl/sys/fcntl.h b/src/openzfs/include/os/macos/spl/sys/fcntl.h
 index 1a4d8fb547..10432350af 100644
@@ -107,6 +129,40 @@ index 3b33458329..ede1449ea3 100644
  #include <sys/_types/_ptrdiff_t.h>
  #endif
  
+diff --git a/src/openzfs/include/os/macos/zfs/sys/zvol_os.h b/src/openzfs/include/os/macos/zfs/sys/zvol_os.h
+index bd84953f02..0387357901 100644
+--- a/src/openzfs/include/os/macos/zfs/sys/zvol_os.h
++++ b/src/openzfs/include/os/macos/zfs/sys/zvol_os.h
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: declares zvol_os_dispatch and the count of a zvol's queued I/O (CDDL-1.0 section 3.3). */
+ #ifndef _SYS_ZVOL_OS_h
+ #define	_SYS_ZVOL_OS_h
+ 
+@@ -35,6 +36,9 @@ struct zvol_state_os {
+ 	zvol_iokit_t *zvo_iokitdev;	/* IOKit device */
+ 	uint64_t	zvo_openflags;	/* Remember flags used at open */
+ 	char 	zvo_bsdname[MAXPATHLEN]; /* /dev/diskX */
++	uint64_t	zvo_inflight;
++	kcondvar_t	zvo_inflight_cv;
++	boolean_t	zvo_closing;
+ };
+ 
+ extern int zvol_os_ioctl(dev_t, unsigned long, caddr_t,
+@@ -49,6 +53,11 @@ extern int zvol_os_write(dev_t dev, struct uio *uio, int p);
+ extern int zvol_os_read_zv(zvol_state_t *zv, zfs_uio_t *uio);
+ extern int zvol_os_write_zv(zvol_state_t *zv, zfs_uio_t *uio);
+ extern int zvol_os_unmap(zvol_state_t *zv, uint64_t off, uint64_t bytes);
++extern void zvol_os_dispatch(void (*func)(void *), void *arg,
++    taskq_ent_t *ent);
++extern boolean_t zvol_os_io_start(zvol_state_t *zv);
++extern void zvol_os_io_done(zvol_state_t *zv);
++extern void zvol_os_io_wait(zvol_state_t *zv);
+ 
+ extern void zvol_os_strategy(struct buf *bp);
+ extern int zvol_os_get_volume_blocksize(dev_t dev);
 diff --git a/src/openzfs/include/sys/zfs_vnops.h b/src/openzfs/include/sys/zfs_vnops.h
 index 08cf0e2a6e..1dc5ab40d6 100644
 --- a/src/openzfs/include/sys/zfs_vnops.h
@@ -295,19 +351,103 @@ index 14f145a891..5b469ea625 100644
  }
  
  } /* extern "C" */
-diff --git a/src/openzfs/module/os/macos/zfs/zfs_boot.cpp b/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
-index 799953c964..f1c15c6c7e 100644
---- a/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
-+++ b/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
+diff --git a/src/openzfs/module/os/macos/zfs/vdev_file_os.c b/src/openzfs/module/os/macos/zfs/vdev_file_os.c
+index e09f9e6bc1..a6e2e53f0b 100644
+--- a/src/openzfs/module/os/macos/zfs/vdev_file_os.c
++++ b/src/openzfs/module/os/macos/zfs/vdev_file_os.c
 @@ -18,6 +18,7 @@
   *
   * CDDL HEADER END
   */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: file vdevs are closed on unmount only while the system shuts down, not under I/O in normal use (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+  * Copyright (c) 2011, 2016 by Delphix. All rights reserved.
+@@ -104,12 +105,17 @@ vdev_file_close_all_impl(vdev_t *vd)
+ 		vdev_file_close_all_impl(vd->vdev_child[c]);
+ }
+ 
++extern int get_system_inshutdown(void);
++
+ void
+ vdev_file_close_all(objset_t *os)
+ {
+-	spa_t *spa = dmu_objset_spa(os);
+-	if (!vdev_file_close_on_unmount)
++	spa_t *spa;
++
++	if (os == NULL || !vdev_file_close_on_unmount ||
++	    !get_system_inshutdown())
+ 		return;
++	spa = dmu_objset_spa(os);
+ 	spa_config_enter(spa, SCL_VDEV, FTAG, RW_READER);
+ 	vdev_file_close_all_impl(spa->spa_root_vdev);
+ 	spa_config_exit(spa, SCL_VDEV, FTAG);
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_boot.cpp b/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
+index 799953c964..a0d8f08ee9 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
++++ b/src/openzfs/module/os/macos/zfs/zfs_boot.cpp
+@@ -18,6 +18,8 @@
+  *
+  * CDDL HEADER END
+  */
 +/* Modified 2026-11-14 by The Blueberry Pie OS Authors: only zfs_boot= names the pool to import for the root, not rd= or rootdev=, and a pool without bootfs says so (CDDL-1.0 section 3.3). */
++/* Modified 2026-11-17 by The Blueberry Pie OS Authors: only leaf media are probed, a whole disk is probed only once its partitions are known, and the list of pool configs is freed after each pass (CDDL-1.0 section 3.3). */
  /*
   * Copyright (c) 2015, Evan Susarret.  All rights reserved.
   */
-@@ -1491,7 +1492,7 @@ zfs_boot_publish_bootfs(IOService *zfs_hl, pool_list_t *pools)
+@@ -183,6 +185,7 @@ typedef struct pool_list {
+ 	char			*pool_name;
+ 	OSSet			*new_disks;
+ 	OSSet			*disks;
++	OSSet			*deferred_disks;
+ 	kmutex_t		lock;
+ 	kcondvar_t		cv;
+ 	IOService		*zfs_hl;
+@@ -1160,7 +1163,7 @@ zfs_boot_probe_media(void* target, void* refCon,
+ 	}
+ 
+ 	isLeaf = media->getProperty(kIOMediaLeafKey);
+-	if (!isLeaf) {
++	if (isLeaf != kOSBooleanTrue) {
+ 		dprintf("%s skipping non-leaf\n", __func__);
+ 		goto out;
+ 	}
+@@ -1246,6 +1249,21 @@ zfs_boot_probe_disk(pool_list_t *pools, IOMedia *media)
+ 		return (false);
+ 	}
+ 
++	if (media->isWhole() &&
++	    media->waitQuiet(5ULL * NSEC_PER_SEC) != kIOReturnSuccess) {
++		dprintf("%s matching not settled, probing later\n", __func__);
++		mutex_enter(&pools->lock);
++		if (pools->terminating == ZFS_BOOT_ACTIVE) {
++			pools->deferred_disks->setObject(media);
++		}
++		mutex_exit(&pools->lock);
++		return (false);
++	}
++	if (media->getProperty(kIOMediaLeafKey) != kOSBooleanTrue) {
++		dprintf("%s skipping non-leaf\n", __func__);
++		return (false);
++	}
++
+ 	/* Try to get a UUID from the media */
+ 	uuid = OSDynamicCast(OSString, media->getProperty(kIOMediaUUIDKey));
+ 	if (uuid && uuid->getLength() != 0) {
+@@ -1376,6 +1394,11 @@ zfs_boot_free()
+ 		pools->disks->release();
+ 		pools->disks = 0;
+ 	}
++	if (pools->deferred_disks) {
++		pools->deferred_disks->flushCollection();
++		pools->deferred_disks->release();
++		pools->deferred_disks = 0;
++	}
+ 
+ 	/* Clear the zfs IOService handle */
+ 	if (pools->zfs_hl) {
+@@ -1491,7 +1514,7 @@ zfs_boot_publish_bootfs(IOService *zfs_hl, pool_list_t *pools)
  	}
  	if (bootfs == 0) {
  		spa_namespace_exit(FTAG);
@@ -316,7 +456,47 @@ index 799953c964..f1c15c6c7e 100644
  		kmem_free(zfs_bootfs, len);
  		return (0);
  	}
-@@ -2030,25 +2031,6 @@ zfs_boot_check_mountroot(char **pool_name, uint64_t *pool_guid)
+@@ -1720,7 +1743,7 @@ zfs_boot_publish_bootfs(IOService *zfs_hl, pool_list_t *pools)
+ DSTATIC void
+ zfs_boot_import_thread(void *arg)
+ {
+-	nvlist_t *configs, *nv, *newnv;
++	nvlist_t *configs = NULL, *nv, *newnv;
+ 	nvpair_t *elem;
+ 	IOService *zfs_hl = 0;
+ 	OSSet *disks, *new_set = 0;
+@@ -1926,6 +1949,9 @@ zfs_boot_import_thread(void *arg)
+ 			}
+ 		}
+ 
++		nvlist_free(configs);
++		configs = NULL;
++
+ 		/* Retake pool list lock */
+ 		mutex_enter(&pools->lock);
+ 
+@@ -1941,6 +1967,11 @@ next_locked:
+ 			goto out_locked;
+ 		}
+ 
++		if (pools->deferred_disks->getCount() != 0) {
++			pools->disks->merge(pools->deferred_disks);
++			pools->deferred_disks->flushCollection();
++		}
++
+ 		dprintf("%s sleeping on lock\n", __func__);
+ 		/* Sleep on lock, thread is resumed with lock held */
+ 		cv_timedwait_sig(&pools->cv, &pools->lock,
+@@ -1954,6 +1985,8 @@ out_locked:
+ 	mutex_exit(&pools->lock);
+ 
+ out_unlocked:
++	nvlist_free(configs);
++
+ 	/* Cleanup new_set */
+ 	if (new_set) {
+ 		new_set->flushCollection();
+@@ -2030,25 +2063,6 @@ zfs_boot_check_mountroot(char **pool_name, uint64_t *pool_guid)
  
  	result = (result && (zfs_boot != 0) && strlen(zfs_boot) > 0);
  
@@ -342,6 +522,64 @@ index 799953c964..f1c15c6c7e 100644
  	/*
  	 * XXX To Do - parse zpool_guid boot arg
  	 */
+@@ -2117,6 +2131,9 @@ zfs_boot_init(IOService *zfs_hl)
+ 		/* Fail if memory couldn't be allocated */
+ 		goto error;
+ 	}
++	if ((pools->deferred_disks = OSSet::withCapacity(1)) == NULL) {
++		goto error;
++	}
+ 
+ 	/* create the zfs_boot taskq */
+ 
+@@ -2172,6 +2189,10 @@ error:
+ 			pools->disks->release();
+ 			pools->disks = 0;
+ 		}
++		if (pools->deferred_disks) {
++			pools->deferred_disks->release();
++			pools->deferred_disks = 0;
++		}
+ 		kmem_free(pools, sizeof (pool_list_t));
+ 		pools = 0;
+ 	}
+diff --git a/src/openzfs/module/os/macos/zfs/zfs_file_os.c b/src/openzfs/module/os/macos/zfs/zfs_file_os.c
+index 19c2a1c0e7..1f9db8c8e9 100644
+--- a/src/openzfs/module/os/macos/zfs/zfs_file_os.c
++++ b/src/openzfs/module/os/macos/zfs/zfs_file_os.c
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: a file's attributes include its type, so a file vdev is seen as a regular file (CDDL-1.0 section 3.3). */
+ 
+ #include <IOKit/IOLib.h>
+ #include <sys/zfs_context.h>
+@@ -341,7 +342,23 @@ zfs_file_getattr(zfs_file_t *filp, zfs_file_attr_t *zfattr)
+ 		return (rc);
+ 
+ 	zfattr->zfa_size = vap.va_size;
+-	zfattr->zfa_mode = vap.va_mode;
++	zfattr->zfa_mode = vap.va_mode & ~S_IFMT;
++	switch (vnode_vtype(filp->f_vnode)) {
++	case VREG:
++		zfattr->zfa_mode |= S_IFREG;
++		break;
++	case VDIR:
++		zfattr->zfa_mode |= S_IFDIR;
++		break;
++	case VBLK:
++		zfattr->zfa_mode |= S_IFBLK;
++		break;
++	case VCHR:
++		zfattr->zfa_mode |= S_IFCHR;
++		break;
++	default:
++		break;
++	}
+ 
+ 	return (0);
+ }
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c b/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
 index 54978f8fa1..8285e69349 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
@@ -405,18 +643,33 @@ index 390a3b3359..2aca21cb0f 100644
  } // Extern "C"
  
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
-index 840b10fba4..2aa43160e0 100644
+index 840b10fba4..19a73954e1 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
 +++ b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
-@@ -18,6 +18,7 @@
+@@ -18,6 +18,9 @@
   *
   * CDDL HEADER END
   */
 +/* Modified 2026-11-15 by The Blueberry Pie OS Authors: the root mount names its dataset as the mount's source (CDDL-1.0 section 3.3). */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: a remount holds the teardown lock, does not make a dataset writable while its readonly property is on, must name the dataset mounted, and keeps the mount's source (CDDL-1.0 section 3.3). */
++/* Modified 2026-11-17 by The Blueberry Pie OS Authors: a remount holds the teardown lock as a reader, and the snapdir callback purges the name cache only when the value changes and the teardown lock is not held as a writer (CDDL-1.0 section 3.3). */
  /*
   * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
   * Copyright (c) 2011 Pawel Jakub Dawidek <pawel@dawidek.net>.
-@@ -1324,6 +1325,8 @@ zfs_vfs_mountroot(struct mount *mp, struct vnode *devvp, vfs_context_t ctx)
+@@ -381,8 +384,11 @@ static void
+ snapdir_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
++	boolean_t changed = (zfsvfs->z_show_ctldir != newval);
++
+ 	zfsvfs->z_show_ctldir = newval;
+-	cache_purgevfs(zfsvfs->z_vfs, FALSE);
++	if (changed && !ZFS_TEARDOWN_WRITE_HELD(zfsvfs))
++		cache_purgevfs(zfsvfs->z_vfs, FALSE);
+ }
+ 
+ static void
+@@ -1324,6 +1330,8 @@ zfs_vfs_mountroot(struct mount *mp, struct vnode *devvp, vfs_context_t ctx)
  	/* Set this mount to read-only */
  	zfsvfs->z_rdonly = 1;
  
@@ -425,6 +678,70 @@ index 840b10fba4..2aa43160e0 100644
  	/*
  	 * Due to XNU mount flags, readonly gets set off for a short
  	 * while, which means mimic will kick in if enabled. But we need
+@@ -1482,6 +1490,26 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
+ 		/* refresh mount options */
+ 		zfsvfs_t *zfsvfs = vfs_fsprivate(vfsp);
+ 
++		if (zfsvfs == NULL)
++			goto out;
++		ZFS_TEARDOWN_ENTER_READ(zfsvfs, FTAG);
++		if (zfsvfs->z_unmounted || zfsvfs->z_os == NULL) {
++			error = SET_ERROR(EIO);
++			goto update_out;
++		}
++
++		if (osname != NULL && *osname != '\0') {
++			char *nm = kmem_alloc(ZFS_MAX_DATASET_NAME_LEN,
++			    KM_SLEEP);
++
++			dmu_objset_name(zfsvfs->z_os, nm);
++			if (strcmp(nm, osname) != 0)
++				error = SET_ERROR(EINVAL);
++			kmem_free(nm, ZFS_MAX_DATASET_NAME_LEN);
++			if (error != 0)
++				goto update_out;
++		}
++
+ 		if (zfsvfs != NULL) {
+ 			if (zfsvfs->z_rdonly == 0 &&
+ 			    (cmdflags & MNT_RDONLY ||
+@@ -1499,6 +1527,17 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
+ 			}
+ 
+ 			if (vfs_iswriteupgrade(vfsp)) {
++				objset_t *os = zfsvfs->z_os;
++				uint64_t ro = 0;
++
++				dsl_pool_config_enter(dmu_objset_pool(os), FTAG);
++				error = dsl_prop_get_int_ds(dmu_objset_ds(os),
++				    zfs_prop_to_name(ZFS_PROP_READONLY), &ro);
++				dsl_pool_config_exit(dmu_objset_pool(os), FTAG);
++				if (error == 0 && ro != 0)
++					error = EROFS;
++				if (error != 0)
++					goto update_out;
+ 				/* upgrade */
+ 				dprintf("%s: upgrade requested\n", __func__);
+ 				zfsvfs->z_rdonly = 0;
+@@ -1511,6 +1550,8 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
+ 				}
+ 			}
+ 		}
++update_out:
++		ZFS_TEARDOWN_EXIT_READ(zfsvfs, FTAG);
+ 		goto out;
+ 	}
+ 
+@@ -1535,7 +1576,8 @@ out:
+ 		vfs_setextendedsecurity(vfsp);
+ 
+ 		// Set /dev/disk name if we have one, otherwise, datasetname
+-		vfs_mountedfrom(vfsp, proxy && *proxy ? proxy : osname);
++		if (!(cmdflags & MNT_UPDATE))
++			vfs_mountedfrom(vfsp, proxy && *proxy ? proxy : osname);
+ 
+ 	}
+ 
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c b/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
 index 474427ba00..afc996b304 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_vnops_os.c
@@ -573,6 +890,267 @@ index 6e7292992d..d74f25b21f 100644
  
  
  /*
+diff --git a/src/openzfs/module/os/macos/zfs/zvolIO.cpp b/src/openzfs/module/os/macos/zfs/zvolIO.cpp
+index fcf6c80a88..b6c3fca982 100644
+--- a/src/openzfs/module/os/macos/zfs/zvolIO.cpp
++++ b/src/openzfs/module/os/macos/zfs/zvolIO.cpp
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: I/O runs on the zvol taskqs, completes asynchronously and reports its errors, and a cache flush waits for the I/O queued before it (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2013-2020, Jorgen Lundman.  All rights reserved.
+  */
+@@ -541,6 +542,43 @@ org_openzfsonosx_zfs_zvol_device::handleClose(IOService *client,
+ 
+ }
+ 
++typedef struct zvolio_async {
++	zvol_state_t *zv;
++	IOMemoryDescriptor *buffer;
++	IODirection direction;
++	struct iovec iov;
++	zfs_uio_t uio;
++	IOByteCount count;
++	IOStorageCompletion completion;
++	taskq_ent_t ent;
++} zvolio_async_t;
++
++static void
++zvolio_async_run(void *arg)
++{
++	zvolio_async_t *za = (zvolio_async_t *)arg;
++	IOStorageCompletion completion = za->completion;
++	IOByteCount done;
++	IOReturn status;
++	int error;
++
++	if (za->direction == kIODirectionIn)
++		error = zvol_os_read_zv(za->zv, &za->uio);
++	else
++		error = zvol_os_write_zv(za->zv, &za->uio);
++
++	done = za->count - zfs_uio_resid(&za->uio);
++	if (error == 0 && done != za->count)
++		error = EIO;
++	status = error == 0 ? kIOReturnSuccess : kIOReturnIOError;
++
++	zvol_os_io_done(za->zv);
++	za->buffer->release();
++	kmem_free(za, sizeof (*za));
++
++	IOStorage::complete(&completion, status, done);
++}
++
+ IOReturn
+ org_openzfsonosx_zfs_zvol_device::doAsyncReadWrite(
+     IOMemoryDescriptor *buffer, UInt64 block, UInt64 nblks,
+@@ -585,31 +623,25 @@ org_openzfsonosx_zfs_zvol_device::doAsyncReadWrite(
+ 	//   direction == kIODirectionIn ? "Read" : "Write",
+ 	//  block, nblks, (ZVOL_BSIZE));
+ 
+-	/* Perform the read or write operation through the transport driver. */
+ 	actualByteCount = (nblks*(ZVOL_BSIZE));
+ 
+-	/* Make sure we don't go away while the command is being executed */
+-	/* Open should be holding a retain */
++	if (!zvol_os_io_start(zv))
++		return (kIOReturnNotAttached);
+ 
+-	struct iovec iov;
+-	iov.iov_base = (void *)buffer;
+-	iov.iov_len = actualByteCount;
+-	zfs_uio_t uio;
+-	zfs_uio_iovec_func_init(&uio, &iov, 1, block*(ZVOL_BSIZE),
++	zvolio_async_t *za = (zvolio_async_t *)kmem_zalloc(sizeof (*za),
++	    KM_SLEEP);
++	za->zv = zv;
++	za->buffer = buffer;
++	buffer->retain();
++	za->direction = direction;
++	za->count = actualByteCount;
++	za->completion = *completion;
++	za->iov.iov_base = (void *)buffer;
++	za->iov.iov_len = actualByteCount;
++	zfs_uio_iovec_func_init(&za->uio, &za->iov, 1, block*(ZVOL_BSIZE),
+ 	    (zfs_uio_seg_t)UIO_FUNCSPACE, actualByteCount, 0, zvolIO_strategy);
+ 
+-	if (direction == kIODirectionIn) {
+-	    zvol_os_read_zv(zv, &uio);
+-	} else {
+-		zvol_os_write_zv(zv, &uio);
+-	}
+-
+-	if (zfs_uio_resid(&uio) != 0)
+-		printf("Read/Write operation failed\n");
+-
+-	// Call the completion function.
+-	(completion->action)(completion->target, completion->parameter,
+-	    kIOReturnSuccess, actualByteCount);
++	zvol_os_dispatch(zvolio_async_run, za, &za->ent);
+ 
+ 	return (kIOReturnSuccess);
+ }
+@@ -780,6 +812,8 @@ org_openzfsonosx_zfs_zvol_device::doSynchronizeCache(void)
+ {
+ 	int error = 0;
+ 	dprintf("doSync\n");
++	if (zv)
++		zvol_os_io_wait(zv);
+ 	if (zv && zv->zv_zilog) {
+ 		error = zil_commit(zv->zv_zilog, ZVOL_OBJ);
+ 	}
+diff --git a/src/openzfs/module/os/macos/zfs/zvol_os.c b/src/openzfs/module/os/macos/zfs/zvol_os.c
+index fb6227a857..223ab4cb2a 100644
+--- a/src/openzfs/module/os/macos/zfs/zvol_os.c
++++ b/src/openzfs/module/os/macos/zfs/zvol_os.c
+@@ -18,6 +18,8 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-16 by The Blueberry Pie OS Authors: zvol I/O from IOKit runs on the zvol taskqs and completes asynchronously, the last close refuses new I/O, waits for the I/O queued and keeps the suspend lock when it had to wait for it, and the device node's open and close do not take the state lock twice (CDDL-1.0 section 3.3). */
++/* Modified 2026-11-17 by The Blueberry Pie OS Authors: a retry does not count a suspend lock it gave up (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2020 by Jorgen Lundman. All rights reserved.
+  */
+@@ -109,6 +111,47 @@ zvol_os_spawn(zvol_state_t *zv,
+ 	    zvol_os_spawn_cb, zvr, 0, &zvr->zv_ent);
+ }
+ 
++void
++zvol_os_dispatch(void (*func)(void *), void *arg, taskq_ent_t *ent)
++{
++	int tqid = atomic_inc_32_nv(&zvol_os_rr) % zvol_taskqs.tqs_cnt;
++
++	taskq_init_ent(ent);
++	taskq_dispatch_ent(zvol_taskqs.tqs_taskq[tqid], func, arg, 0, ent);
++}
++
++boolean_t
++zvol_os_io_start(zvol_state_t *zv)
++{
++	boolean_t ok;
++
++	mutex_enter(&zv->zv_state_lock);
++	ok = zv->zv_open_count > 0 && zv->zv_dn != NULL &&
++	    !zv->zv_zso->zvo_closing;
++	if (ok)
++		zv->zv_zso->zvo_inflight++;
++	mutex_exit(&zv->zv_state_lock);
++	return (ok);
++}
++
++void
++zvol_os_io_done(zvol_state_t *zv)
++{
++	mutex_enter(&zv->zv_state_lock);
++	if (--zv->zv_zso->zvo_inflight == 0)
++		cv_broadcast(&zv->zv_zso->zvo_inflight_cv);
++	mutex_exit(&zv->zv_state_lock);
++}
++
++void
++zvol_os_io_wait(zvol_state_t *zv)
++{
++	mutex_enter(&zv->zv_state_lock);
++	while (zv->zv_zso->zvo_inflight > 0)
++		cv_wait(&zv->zv_zso->zvo_inflight_cv, &zv->zv_state_lock);
++	mutex_exit(&zv->zv_state_lock);
++}
++
+ static void
+ zvol_os_spawn_wait_cb(void *param)
+ {
+@@ -187,6 +230,7 @@ zvol_os_verify_and_lock(zvol_state_t *node, boolean_t takesuspend)
+ 	int ret = ZVOL_LOCK_HELD;
+ 
+ retry:
++	ret &= ~ZVOL_LOCK_SUSPEND;
+ 	rw_enter(&zvol_state_lock, RW_READER);
+ 	for (zv = list_head(&zvol_state_list); zv != NULL;
+ 	    zv = list_next(&zvol_state_list, zv)) {
+@@ -237,7 +281,8 @@ retry:
+ 				rw_enter(&zv->zv_suspend_lock, RW_READER);
+ 				mutex_enter(&zv->zv_state_lock);
+ 				/* check to see if zv_suspend_lock is needed */
+-				if (zv->zv_open_count != 0) {
++				if (zv->zv_open_count != 0 &&
++				    !(takesuspend && zv->zv_open_count == 1)) {
+ 					rw_exit(&zv->zv_suspend_lock);
+ 					ret &= ~ZVOL_LOCK_SUSPEND;
+ 				}
+@@ -630,6 +675,7 @@ zvol_os_alloc(dev_t dev, const char *name)
+ 
+ 	zv = kmem_zalloc(sizeof (zvol_state_t), KM_SLEEP);
+ 	zso = kmem_zalloc(sizeof (struct zvol_state_os), KM_SLEEP);
++	cv_init(&zso->zvo_inflight_cv, NULL, CV_DEFAULT, NULL);
+ 	zv->zv_zso = zso;
+ 
+ 	list_link_init(&zv->zv_next);
+@@ -670,6 +716,7 @@ zvol_os_free(zvol_state_t *zv)
+ 	mutex_destroy(&zv->zv_state_lock);
+ 	dataset_kstats_destroy(&zv->zv_kstat);
+ 
++	cv_destroy(&zv->zv_zso->zvo_inflight_cv);
+ 	kmem_free(zv->zv_zso, sizeof (struct zvol_state_os));
+ 	kmem_free(zv, sizeof (zvol_state_t));
+ }
+@@ -874,6 +921,7 @@ zvol_os_open_zv(zvol_state_t *zv, int flag, int otyp, struct proc *p)
+ 	}
+ 
+ 	zv->zv_open_count++;
++	zv->zv_zso->zvo_closing = B_FALSE;
+ 
+ 	zvol_os_verify_lock_exit(zv, locks);
+ 	return (0);
+@@ -905,10 +953,10 @@ zvol_os_open(dev_t devp, int flag, int otyp, struct proc *p)
+ 	if (zv == NULL) {
+ 		return (SET_ERROR(ENXIO));
+ 	}
++	mutex_exit(&zv->zv_state_lock);
+ 
+ 	error = zvol_os_open_zv(zv, flag, otyp, p);
+ 
+-	mutex_exit(&zv->zv_state_lock);
+ 	return (SET_ERROR(error));
+ }
+ 
+@@ -917,6 +965,13 @@ zvol_os_close_zv(zvol_state_t *zv, int flag, int otyp, struct proc *p)
+ {
+ 	int locks;
+ 
++	mutex_enter(&zv->zv_state_lock);
++	if (zv->zv_open_count == 1)
++		zv->zv_zso->zvo_closing = B_TRUE;
++	while (zv->zv_zso->zvo_inflight > 0)
++		cv_wait(&zv->zv_zso->zvo_inflight_cv, &zv->zv_state_lock);
++	mutex_exit(&zv->zv_state_lock);
++
+ 	if ((locks = zvol_os_verify_and_lock(zv, TRUE)) == 0)
+ 		return (SET_ERROR(ENOENT));
+ 
+@@ -927,6 +982,8 @@ zvol_os_close_zv(zvol_state_t *zv, int flag, int otyp, struct proc *p)
+ 
+ 	if (zv->zv_open_count == 0)
+ 		zvol_last_close(zv);
++	else
++		zv->zv_zso->zvo_closing = B_FALSE;
+ 
+ 	zvol_os_verify_lock_exit(zv, locks);
+ 
+@@ -946,10 +1003,10 @@ zvol_os_close(dev_t dev, int flag, int otyp, struct proc *p)
+ 	if (zv == NULL) {
+ 		return (SET_ERROR(-ENXIO));
+ 	}
++	mutex_exit(&zv->zv_state_lock);
+ 
+ 	error = zvol_os_close_zv(zv, flag, otyp, p);
+ 
+-	mutex_exit(&zv->zv_state_lock);
+ 	return (error);
+ }
+ 
 diff --git a/src/openzfs/module/zfs/zfs_vnops.c b/src/openzfs/module/zfs/zfs_vnops.c
 index 8d11656383..e76e13d072 100644
 --- a/src/openzfs/module/zfs/zfs_vnops.c
