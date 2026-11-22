@@ -6,9 +6,11 @@ on:
   workflow_dispatch:
 
 env:
-  PIETOOLCHAIN_VERSION: '0.2.0'
-  PIETOOLCHAIN_SHA256: 495ced992885c4717bcb468607d473934aef74046d82dd54bae36777942f4c63
-  PIETOOLCHAIN_SDK_SHA256: 65568a3a247c9f457c9360342a2eeb74535e579e08a14a2933ca5d99ca89a709
+  PIETOOLCHAIN_HOST_VERSION: '0.3.0'
+  PIETOOLCHAIN_HOST_SHA256: 8d65a1bc7ef483a033af0f7657007a0d38f61f1480b418858dca32380a3e9095
+  PIETOOLCHAIN_SHA256: 040a41715505af79382d93c3e63b2dbe2d8dfd4caee3c76db06ba07ca9bfc04a
+  PIETOOLCHAIN_SDK_VERSION: '0.3.0'
+  PIETOOLCHAIN_SDK_SHA256: be67603f105be380b9d26d1955d46bf92eb455dbf6e81fb281311377eb7e72d7
 
 permissions:
   contents: read
@@ -26,7 +28,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            dpkg-dev devscripts lintian licenserecon xz-utils python3
+            dpkg-dev devscripts lintian licenserecon xz-utils python3 python3-debian
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -39,7 +41,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: blueberrypieos/workflows
-          ref: 21669c62ddbce5aca5cbabd8066073cf37a35c65 # v2
+          ref: 525ca792250a15785c0f393c4c18a652d89fc573 # v3
           path: .workflows
           persist-credentials: false
 
@@ -83,18 +85,22 @@ jobs:
           DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
             ca-certificates curl dpkg-dev build-essential devscripts
 
-      - name: pietoolchain and pietoolchain-sdk
+      - name: pietoolchain-host, pietoolchain and pietoolchain-sdk
         run: |
           github=https://github.com/blueberrypieos
-          tc="pietoolchain_${PIETOOLCHAIN_VERSION}_amd64.deb"
-          sdk="pietoolchain-sdk_${PIETOOLCHAIN_VERSION}_all.deb"
+          host="pietoolchain-host_${PIETOOLCHAIN_HOST_VERSION}_amd64.deb"
+          tc="pietoolchain_${PIETOOLCHAIN_HOST_VERSION}_all.deb"
+          sdk="pietoolchain-sdk_${PIETOOLCHAIN_SDK_VERSION}_all.deb"
+          curl -fsSL --retry 3 -o "/tmp/$host" \
+            "$github/pietoolchain-host/releases/download/$PIETOOLCHAIN_HOST_VERSION/$host"
           curl -fsSL --retry 3 -o "/tmp/$tc" \
-            "$github/pietoolchain/releases/download/$PIETOOLCHAIN_VERSION/$tc"
+            "$github/pietoolchain-host/releases/download/$PIETOOLCHAIN_HOST_VERSION/$tc"
           curl -fsSL --retry 3 -o "/tmp/$sdk" \
-            "$github/pietoolchain/releases/download/$PIETOOLCHAIN_VERSION/$sdk"
-          printf '%s  %s\n' "$PIETOOLCHAIN_SHA256" "/tmp/$tc" \
+            "$github/pietoolchain/releases/download/$PIETOOLCHAIN_SDK_VERSION/$sdk"
+          printf '%s  %s\n' "$PIETOOLCHAIN_HOST_SHA256" "/tmp/$host" \
+            "$PIETOOLCHAIN_SHA256" "/tmp/$tc" \
             "$PIETOOLCHAIN_SDK_SHA256" "/tmp/$sdk" | sha256sum -c -
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "/tmp/$tc" "/tmp/$sdk"
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "/tmp/$host" "/tmp/$tc" "/tmp/$sdk"
 
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
@@ -141,7 +147,7 @@ jobs:
       id-token: write
       attestations: write
       artifact-metadata: write
-    uses: blueberrypieos/workflows/.github/workflows/attest.yml@21669c62ddbce5aca5cbabd8066073cf37a35c65 # v2
+    uses: blueberrypieos/workflows/.github/workflows/attest.yml@525ca792250a15785c0f393c4c18a652d89fc573 # v3
     with:
       artifact: ${{ needs.binary.outputs.artifact }}
 
@@ -150,6 +156,6 @@ jobs:
     if: github.event_name == 'push' && github.ref_type == 'tag'
     permissions:
       contents: write
-    uses: blueberrypieos/workflows/.github/workflows/release.yml@21669c62ddbce5aca5cbabd8066073cf37a35c65 # v2
+    uses: blueberrypieos/workflows/.github/workflows/release.yml@525ca792250a15785c0f393c4c18a652d89fc573 # v3
     with:
       artifact: ${{ needs.binary.outputs.artifact }}

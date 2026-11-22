@@ -110,6 +110,7 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
     host, so a kext can drive its CYW43455. The kernel powers the chip
     through WL_ON. The boot-arg pie_sdio=0 leaves the slot to the SD card
     driver.
+  * Build-Depend on pietoolchain-host and pietoolchain-sdk.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
 
