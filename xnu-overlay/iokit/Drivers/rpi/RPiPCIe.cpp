@@ -426,20 +426,11 @@ power_m2_slot(void)
 		IOLog("RPiPCIe: M2_PWR_EN (GPIO %d of %s): %s, %s%s\n", line, node->getName(), output ? "output" : "input",
 		    high ? "high" : "low", output && high ? "" : "; driven high");
 		if (!(output && high)) {
-			bank[1] |= bit;
-			bank[2] &= ~bit;
+			RPiGPIOUpdate(&bank[1], 0, bit);
+			RPiGPIOUpdate(&bank[2], bit, 0);
 			IOSleep(100);
 		}
-		char key[12];
-		snprintf(key, sizeof(key), "%d", line);
-		OSDictionary *reserved = OSDictionary::withCapacity(1);
-		OSString *consumer = OSString::withCString("M2_PWR_EN (kernel)");
-		if (reserved != NULL && consumer != NULL) {
-			reserved->setObject(key, consumer);
-			node->setProperty("IOGPIOReservedLines", reserved);
-		}
-		OSSafeReleaseNULL(consumer);
-		OSSafeReleaseNULL(reserved);
+		RPiReserveGPIOLine(node, (unsigned)line, "M2_PWR_EN (kernel)");
 		map->release();
 		break;
 	}

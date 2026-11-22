@@ -12,6 +12,9 @@
 
 #include "../../pie/rpi.h"
 
+/* Records line of a GPIO controller's node as the kernel's, for piegpio. */
+void RPiReserveGPIOLine(IORegistryEntry *node, unsigned line, const char *consumer);
+
 class RPiPlatformExpert : public IODTPlatformExpert
 {
 	OSDeclareDefaultStructors(RPiPlatformExpert);

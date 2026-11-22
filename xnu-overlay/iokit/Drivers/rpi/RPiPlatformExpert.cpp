@@ -100,6 +100,9 @@ rpi_psci_call(uint64_t fn, uint64_t arg0, uint64_t arg1, uint64_t arg2)
 
 #pragma mark RPiPlatformExpert
 
+/* RPiGPIOUpdate's lock, made before any driver starts. */
+static IOSimpleLock *rpi_gpio_lock;
+
 #undef super
 #define super IODTPlatformExpert
 OSDefineMetaClassAndStructors(RPiPlatformExpert, IODTPlatformExpert);
@@ -114,7 +117,8 @@ RPiPlatformExpert::start(IOService *provider)
 		IOLog("RPiPlatformExpert: PSCI %lld.%lld\n", (version >> 16) & 0xffff, version & 0xffff);
 	}
 
-	if (!super::start(provider)) {
+	rpi_gpio_lock = IOSimpleLockAlloc();
+	if (rpi_gpio_lock == NULL || !super::start(provider)) {
 		return false;
 	}
 
@@ -322,6 +326,50 @@ RPiDTFindCompatible(const char *compat)
 	return found;
 }
 
+/*
+ * line of a GPIO controller's node, recorded as the kernel's in the
+ * node's IOGPIOReservedLines, line number to consumer, beside the lines
+ * already there. One lock for all callers, which start on different
+ * threads.
+ */
+void
+RPiReserveGPIOLine(IORegistryEntry *node, unsigned line, const char *consumer)
+{
+	static IOLock *lock;
+	if (lock == NULL) {
+		IOLock *l = IOLockAlloc();
+		if (l == NULL || !OSCompareAndSwapPtr(NULL, l, &lock)) {
+			if (l != NULL) {
+				IOLockFree(l);
+			}
+		}
+	}
+	if (lock == NULL) {
+		return;
+	}
+	char key[12];
+	snprintf(key, sizeof(key), "%u", line);
+	IOLockLock(lock);
+	OSDictionary *old = OSDynamicCast(OSDictionary, node->getProperty("IOGPIOReservedLines"));
+	OSDictionary *lines = old != NULL ? OSDictionary::withDictionary(old) : OSDictionary::withCapacity(1);
+	OSString *who = OSString::withCString(consumer);
+	if (lines != NULL && who != NULL) {
+		lines->setObject(key, who);
+		node->setProperty("IOGPIOReservedLines", lines);
+	}
+	OSSafeReleaseNULL(who);
+	OSSafeReleaseNULL(lines);
+	IOLockUnlock(lock);
+}
+
+void
+RPiGPIOUpdate(volatile uint32_t *reg, uint32_t clear, uint32_t set)
+{
+	IOInterruptState is = IOSimpleLockLockDisableInterrupt(rpi_gpio_lock);
+	*reg = (*reg & ~clear) | set;
+	IOSimpleLockUnlockEnableInterrupt(rpi_gpio_lock, is);
+}
+
 #pragma mark DMA addresses
 
 bool
@@ -370,6 +418,11 @@ enum {
 	MBOX_RESPONSE_OK = 0x80000000,
 };
 
+/*
+ * A tag is answered when the firmware sets its response bit or changes its
+ * value buffer: the GPIO expander's set tags come back with their status
+ * written, the line changed, and the request word left as it was.
+ */
 IOReturn
 RPiFirmwareProperty(uint32_t tag, void *data, uint32_t length)
 {
@@ -438,7 +491,7 @@ RPiFirmwareProperty(uint32_t tag, void *data, uint32_t length)
 		if (*(volatile uint32_t *)(regs + MBOX_READ) == word) {
 			msgMem->performOperation(kIOMemoryIncoherentIOFlush, 0, total * 4);
 			ret = msg[1] == MBOX_RESPONSE_OK ? kIOReturnSuccess : kIOReturnError;
-			if (ret == kIOReturnSuccess && !(msg[4] & 0x80000000U)) {
+			if (ret == kIOReturnSuccess && !(msg[4] & 0x80000000U) && bcmp(&msg[5], data, length) == 0) {
 				IOLog("RPiFirmwareProperty: tag 0x%08x not answered (0x%08x)\n", tag, msg[4]);
 			}
 			bcopy(&msg[5], data, length);

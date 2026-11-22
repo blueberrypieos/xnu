@@ -56,6 +56,16 @@ bool RPiCPUAddress(IORegistryEntry *device, uint64_t bus, uint64_t *pa);
  */
 OSArray *RPiDTFindCompatible(const char *compat);
 
+/*
+ * One read-modify-write of a GPIO register that more than one driver
+ * changes, such as a brcmstb GIO bank's DATA or IODIR: the bits of clear
+ * cleared and those of set set, under one lock that every such write
+ * takes. The kernel's WL_ON and M2_PWR_EN lines and piegpio's brcmstb
+ * banks share it. The platform expert makes the lock at its start, before
+ * any driver runs. Any context but a primary interrupt filter.
+ */
+void RPiGPIOUpdate(volatile uint32_t *reg, uint32_t clear, uint32_t set);
+
 __END_DECLS
 
 #endif /* _PIE_RPI_H_ */

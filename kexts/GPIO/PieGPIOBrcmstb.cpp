@@ -64,7 +64,7 @@ class PieGPIOBrcmstbBank : public PieGPIOController
 	volatile uint32_t *reg(unsigned off) { return fParent->regs + (0x20 * fBank + off) / 4; }
 	void setBit(unsigned off, unsigned line, bool on)
 	{
-		*reg(off) = on ? *reg(off) | (1U << line) : *reg(off) & ~(1U << line);
+		RPiGPIOUpdate(reg(off), on ? 0 : 1U << line, on ? 1U << line : 0);
 	}
 
 protected:

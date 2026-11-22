@@ -1,0 +1,51 @@
+Description: SDIO on the Raspberry Pi 4 and 5
+ The build list entries and the static personality for the SDIO bus layer
+ and the Raspberry Pi's SDIO host, whose drivers are in xnu-overlay/. The
+ host's personality probes first, and takes only a non-removable slot
+ with a WiFi chip in the device tree.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-20
+--- a/xnu/iokit/KernelConfigTables.cpp
++++ b/xnu/iokit/KernelConfigTables.cpp
+@@ -29,6 +29,7 @@
+ /* Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)). */
+ /* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ /* Modified 2026-11-19: Rockchip RK3566 I2C, PMIC, USB 2 PHY and EHCI drivers (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-20: SDIO on the Raspberry Pi 4 and 5 (APSL 2.0 section 2.2(b)). */
+ /*
+  * NOTICE: This file was modified by SPARTA, Inc. in 2005 to introduce
+  * support for mandatory and extensible security protections.  This notice
+@@ -73,6 +74,12 @@
+     "     'IONameMatch'     = ('brcm,bcm2711-emmc2', 'brcm,bcm2835-sdhci', 'brcm,bcm2712-sdhci');"
+     "   },"
+     "   {"
++    "     'IOClass'         = RPiSDHCISDIO;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = ('brcm,bcm2835-sdhci', 'brcm,bcm2712-sdhci');"
++    "     'IOProbeScore'    = 1000:32;"
++    "   },"
++    "   {"
+     "     'IOClass'         = RKDWMMC;"
+     "     'IOProviderClass' = IOPlatformDevice;"
+     "     'IONameMatch'     = 'rockchip,rk3568-dw-mshc';"
+--- a/xnu/iokit/conf/files.arm64
++++ b/xnu/iokit/conf/files.arm64
+@@ -1,6 +1,7 @@
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
+ # Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)).
+ # Modified 2026-11-19: Rockchip RK3566 I2C, PMIC, USB 2 PHY and EHCI drivers (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-20: SDIO on the Raspberry Pi 4 and 5 (APSL 2.0 section 2.2(b)).
+ # Portions Copyright (c) Apple Inc. All rights reserved.
+ #
+ # This file contains Original Code and/or Modifications of Original Code
+@@ -33,7 +34,9 @@
+ iokit/Drivers/rpi/RPiPSCIPMGR.cpp					optional config_rpi
+ iokit/Drivers/rpi/RPiWatchdogEarly.cpp				optional config_rpi
+ iokit/Drivers/rpi/RPiSDHCI.cpp					optional config_rpi
++iokit/Drivers/rpi/RPiSDHCISDIO.cpp				optional config_rpi
+ iokit/Drivers/sdmmc/PIESDCard.cpp				optional config_rpi
++iokit/Drivers/sdmmc/PIESDIO.cpp				optional config_rpi
+ iokit/Drivers/rockchip/RKDWMMC.cpp				optional config_rpi
+ iokit/Drivers/rockchip/RKSoC.cpp				optional config_rpi
+ iokit/Drivers/rockchip/RKI2C.cpp				optional config_rpi
