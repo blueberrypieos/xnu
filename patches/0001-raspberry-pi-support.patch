@@ -3,10 +3,15 @@ Description: Raspberry Pi 4 and 5 support
  platforms, whose drivers are in xnu-overlay/. 16K pages on the BCM2712.
  pthread, HFS+, FAT, AMFI and the crypto provider are built into the
  kernel. The kernel takes its corecrypto interface from piecrypto, and
- xnu's corecrypto is not built.
+ xnu's corecrypto is not built. A root daemon checks in as the IOKit
+ daemon with a DaemonReady request, so that kexts load on a device match.
+ Only the kexts that daemon loads are unloaded when idle. mockfs's type
+ number does not count in vfs.generic.maxtypenum, so getvfsbyname ends
+ quickly for a file system that is not registered, and a new file system
+ type only ever raises it.
 Author: The Blueberry Pie OS Authors
 Forwarded: not-needed
-Last-Update: 2026-11-09
+Last-Update: 2026-11-19
 diff --git a/xnu/EXTERNAL_HEADERS/CoreEntitlements/der_vm.h b/xnu/EXTERNAL_HEADERS/CoreEntitlements/der_vm.h
 index cab4a6bc..26a45ac8 100644
 --- a/xnu/EXTERNAL_HEADERS/CoreEntitlements/der_vm.h
@@ -909,6 +914,48 @@ index 3d5e78cc..2d5c2cab 100644
  #endif /* !KERNEL */
  
  
+diff --git a/xnu/bsd/vfs/kpi_vfs.c b/xnu/bsd/vfs/kpi_vfs.c
+index b4a58326..d9c1dd00 100644
+--- a/xnu/bsd/vfs/kpi_vfs.c
++++ b/xnu/bsd/vfs/kpi_vfs.c
+@@ -25,6 +25,7 @@
+  *
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
++/* Modified 2026-11-19: a new file system type raises maxvfstypenum only when it is at or above it (APSL 2.0 section 2.2(b)). */
+ /* Copyright (c) 1995 NeXT Computer, Inc. All Rights Reserved */
+ /*
+  * Copyright (c) 1989, 1993
+@@ -1010,7 +1011,7 @@ vfs_fsadd(struct vfs_fsentry *vfe, vfstable_t *handle)
+ 			lck_mtx_unlock(&vfs_typenum_mtx);
+ 			return EINVAL;
+ 		}
+-		if (maxvfstypenum < OID_AUTO_START) {
++		if (newvfstbl->vfc_typenum >= maxvfstypenum) {
+ 			/* getvfsbyname checks up to but not including maxvfstypenum */
+ 			maxvfstypenum = newvfstbl->vfc_typenum + 1;
+ 		}
+diff --git a/xnu/bsd/vfs/vfs_init.c b/xnu/bsd/vfs/vfs_init.c
+index 60abb99b..0dd4f971 100644
+--- a/xnu/bsd/vfs/vfs_init.c
++++ b/xnu/bsd/vfs/vfs_init.c
+@@ -25,6 +25,7 @@
+  *
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
++/* Modified 2026-11-19: a type number of OID_AUTO_START or more does not raise maxvfstypenum (APSL 2.0 section 2.2(b)). */
+ /* Copyright (c) 1995 NeXT Computer, Inc. All Rights Reserved */
+ /*
+  * Copyright (c) 1989, 1993
+@@ -345,7 +346,7 @@ vfsinit(void)
+ 		if (i) {
+ 			vfsconf[i - 1].vfc_next = vfsp;
+ 		}
+-		if (maxtypenum <= vfsp->vfc_typenum) {
++		if (maxtypenum <= vfsp->vfc_typenum && vfsp->vfc_typenum < OID_AUTO_START) {
+ 			maxtypenum = vfsp->vfc_typenum + 1;
+ 		}
+ 
 diff --git a/xnu/bsd/vfs/vfs_xattr.c b/xnu/bsd/vfs/vfs_xattr.c
 index c5231e1e..eac6206d 100644
 --- a/xnu/bsd/vfs/vfs_xattr.c
@@ -1806,18 +1853,32 @@ index f2aa8353..4ada355a 100644
 +iokit/Drivers/usb/PIEUSBMassStorage.cpp			optional config_rpi
 +iokit/Drivers/nvme/PIENVMe.cpp				optional config_rpi
 diff --git a/xnu/libkern/c++/OSKext.cpp b/xnu/libkern/c++/OSKext.cpp
-index 186c3a98..7c684ccb 100644
+index 186c3a98..702c1836 100644
 --- a/xnu/libkern/c++/OSKext.cpp
 +++ b/xnu/libkern/c++/OSKext.cpp
-@@ -25,6 +25,7 @@
+@@ -25,6 +25,9 @@
   *
   * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
   */
 +/* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: a root daemon checks in as the IOKit daemon (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-19: only the kexts that daemon loads are unloaded when idle (APSL 2.0 section 2.2(b)). */
  
  #define IOKIT_ENABLE_SHARED_PTR
  
-@@ -634,6 +635,17 @@ osdata_kext_free(void * ptr, unsigned int length)
+@@ -347,6 +350,11 @@ static uint32_t             sNextRequestTag            = 0;
+ 
+ static bool                 sUserLoadsActive           = false;
+ static bool                 sIOKitDaemonActive         = false;
++#if CONFIG_KXLD && CONFIG_RPI
++static uint64_t             sIOKitDaemonTaskID         = 0;
++static OSSharedPtr<OSSet>   sIOKitDaemonLoads;
++extern "C" pid_t ipc_port_get_receiver_task(ipc_port_t port, task_t *task);
++#endif
+ static bool                 sDeferredLoadSucceeded     = false;
+ static bool                 sConsiderUnloadsExecuted   = false;
+ 
+@@ -634,6 +642,17 @@ osdata_kext_free(void * ptr, unsigned int length)
  #pragma mark KXLD Allocation Callback
  #endif
  #if CONFIG_KXLD
@@ -1835,7 +1896,7 @@ index 186c3a98..7c684ccb 100644
  /*********************************************************************
  * KXLD Allocation Callback
  *********************************************************************/
-@@ -747,7 +759,10 @@ kxld_log_callback(
+@@ -747,7 +766,10 @@ kxld_log_callback(
  		break;
  	}
  
@@ -1846,7 +1907,7 @@ index 186c3a98..7c684ccb 100644
  }
  #endif // CONFIG_KXLD
  
-@@ -1042,6 +1057,9 @@ OSKext::initialize(void)
+@@ -1042,6 +1064,9 @@ OSKext::initialize(void)
  	/* needed for function lookup */
  	sKeepSymbols = true;
  #endif /* KASAN_DYNAMIC_DENYLIST */
@@ -1856,7 +1917,60 @@ index 186c3a98..7c684ccb 100644
  
  	/*
  	 * Should we panic when the SystemKC is not linked against the
-@@ -4179,6 +4197,10 @@ finish:
+@@ -4000,6 +4025,10 @@ OSKext::loadFromMkext(
+ 
+ 	OSSharedPtr<OSData>        mkextData;
+ 	OSSharedPtr<OSDictionary>  mkextPlist;
++#if CONFIG_KXLD && CONFIG_RPI
++	OSSharedPtr<OSSet>         loadedBefore;
++	bool                       fromDaemon = false;
++#endif
+ 
+ 	OSSharedPtr<OSArray>       logInfoArray;
+ 	OSSharedPtr<OSSerialize>   serializer;
+@@ -4144,6 +4173,12 @@ OSKext::loadFromMkext(
+ 	 * xxx - Would like a better way to handle the default values for the
+ 	 * xxx - start/match opt args.
+ 	 */
++#if CONFIG_KXLD && CONFIG_RPI
++	fromDaemon = sIOKitDaemonActive && get_task_uniqueid(current_task()) == sIOKitDaemonTaskID;
++	if (fromDaemon && sLoadedKexts) {
++		loadedBefore = OSSet::withArray(sLoadedKexts.get(), 0);
++	}
++#endif
+ 	result = OSKext::loadKextWithIdentifier(
+ 		kextIdentifier,
+ 		/* kextRef */ NULL,
+@@ -4152,6 +4187,28 @@ OSKext::loadFromMkext(
+ 		startKextExcludeLevel,
+ 		startMatchingExcludeLevel,
+ 		personalityNames);
++#if CONFIG_KXLD && CONFIG_RPI
++	{
++		OSSharedPtr<const OSSymbol> loadedID = OSSymbol::withString(kextIdentifier);
++		if (fromDaemon) {
++			if (!sIOKitDaemonLoads) {
++				sIOKitDaemonLoads = OSSet::withCapacity(8);
++			}
++			if (sIOKitDaemonLoads && loadedID && result == kOSReturnSuccess) {
++				sIOKitDaemonLoads->setObject(loadedID.get());
++			}
++			for (unsigned int i = 0; sIOKitDaemonLoads && loadedBefore && i < sLoadedKexts->getCount(); i++) {
++				OSKext *loaded = OSDynamicCast(OSKext, sLoadedKexts->getObject(i));
++				if (loaded && !loadedBefore->containsObject(loaded)) {
++					sIOKitDaemonLoads->setObject(loaded->getIdentifier());
++				}
++			}
++		} else if (loadedID && sIOKitDaemonLoads && result == kOSReturnSuccess) {
++			sIOKitDaemonLoads->removeObject(loadedID.get());
++		}
++		loadedBefore.reset();
++	}
++#endif
+ 	if (result != kOSReturnSuccess) {
+ 		goto finish;
+ 	}
+@@ -4179,6 +4236,10 @@ finish:
  
  	IORecursiveLockUnlock(sKextLock);
  
@@ -1867,7 +1981,7 @@ index 186c3a98..7c684ccb 100644
  	/* Note: mkextDataObject will have been retained by every kext w/an
  	 * executable in it. That should all have been flushed out at the
  	 * and of the load operation, but you never know....
-@@ -6631,7 +6653,7 @@ OSKext::load(
+@@ -6631,7 +6692,7 @@ OSKext::load(
  	    "Loading kext %s.",
  	    getIdentifierCString());
  
@@ -1876,7 +1990,7 @@ index 186c3a98..7c684ccb 100644
  	if (isPrelinked() == false) {
  		OSKextLog(this,
  		    kOSKextLogErrorLevel |
-@@ -7247,7 +7269,11 @@ OSKext::loadExecutable()
+@@ -7247,7 +7308,11 @@ OSKext::loadExecutable()
  	}
  
  	/* <rdar://problem/21444003> all callers must be entitled */
@@ -1889,7 +2003,7 @@ index 186c3a98..7c684ccb 100644
  		OSKextLog(this,
  		    kOSKextLogErrorLevel | kOSKextLogLoadFlag,
  		    "Not entitled to link kext '%s'",
-@@ -7749,6 +7775,11 @@ OSKext::jettisonDATASegmentPadding(void)
+@@ -7749,6 +7814,11 @@ OSKext::jettisonDATASegmentPadding(void)
  	if (flags.builtin) {
  		return;
  	}
@@ -1901,7 +2015,7 @@ index 186c3a98..7c684ccb 100644
  	mh = (kernel_mach_header_t *)kmod_info->address;
  
  	if (isInFileset()) {
-@@ -7916,15 +7947,19 @@ OSKext_protect(
+@@ -7916,15 +7986,19 @@ OSKext_protect(
  	vm_map_offset_t    end = start + size;
  
  #pragma unused(kext_mh,map,kc_type)
@@ -1924,7 +2038,19 @@ index 186c3a98..7c684ccb 100644
  }
  
  static inline kern_return_t
-@@ -10411,6 +10446,11 @@ OSKext::handleRequest(
+@@ -9139,6 +9213,11 @@ OSKext::autounloadKext(OSKext * aKext)
+ 	    aKext->isKernelComponent()) {
+ 		goto finish;
+ 	}
++#if CONFIG_KXLD && CONFIG_RPI
++	if (!sIOKitDaemonLoads || !sIOKitDaemonLoads->containsObject(aKext->getIdentifier())) {
++		goto finish;
++	}
++#endif
+ 
+ 	/* Skip a delay-autounload kext, once.
+ 	 */
+@@ -10411,6 +10490,11 @@ OSKext::handleRequest(
  		}
  		taskCanManageAllKCs = IOCurrentTaskHasEntitlement(kOSKextCollectionManagementEntitlement) == TRUE;
  		taskOnlyManagesBootKC = IOCurrentTaskHasEntitlement(kOSKextOnlyBootKCManagementEntitlement) == TRUE;
@@ -1936,7 +2062,37 @@ index 186c3a98..7c684ccb 100644
  
  		if (!taskCanManageAllKCs && !taskOnlyManagesBootKC) {
  			OSKextLog(/* kext */ NULL,
-@@ -12532,6 +12572,14 @@ OSKext::copyInfo(OSArray * infoKeys)
+@@ -10672,6 +10756,29 @@ OSKext::handleRequest(
+ 		printf("KextLog: Loading FileSet KC(s)\n");
+ 		result = OSKext::loadFileSetKexts(requestDict);
+ 	} else if (predicate->isEqualTo(kKextRequestPredicateDaemonReady)) {
++#if CONFIG_KXLD && CONFIG_RPI
++		{
++			mach_port_t kextdPort = IPC_PORT_NULL;
++			task_t receiver = TASK_NULL;
++			if (host_get_kextd_port(host_priv_self(), &kextdPort) == KERN_SUCCESS && IPC_PORT_VALID(kextdPort)) {
++				ipc_port_get_receiver_task(kextdPort, &receiver);
++				ipc_port_release_send(kextdPort);
++			}
++			if (receiver != TASK_NULL && receiver == current_task()) {
++				sIOKitDaemonTaskID = get_task_uniqueid(current_task());
++			}
++		}
++		if (!sIOKitDaemonActive) {
++			sOSKextWasResetAfterUserspaceReboot = false;
++			OSKext::setIOKitDaemonActive();
++			OSKext::setDeferredLoadSucceeded(TRUE);
++			IOService::iokitDaemonLaunched();
++		} else if (sOSKextWasResetAfterUserspaceReboot) {
++			sOSKextWasResetAfterUserspaceReboot = false;
++			OSKext::setIOKitDaemonActive();
++			IOService::startDeferredMatches();
++		}
++#endif
+ 		bool active = iokitDaemonActive();
+ 		printf("KextLog: " kIOKitDaemonName " is %s\n", active ? "active" : "not active");
+ 		if (sOSKextWasResetAfterUserspaceReboot) {
+@@ -12532,6 +12639,14 @@ OSKext::copyInfo(OSArray * infoKeys)
  						break;
  					}
  				}
@@ -1951,6 +2107,18 @@ index 186c3a98..7c684ccb 100644
  
  				/* If we have a kmod_info struct, calculated the wired size
  				 * from that. Otherwise it's the full load size.
+@@ -13433,7 +13548,11 @@ try_codeless:
+ 		 * dext and codeless kext personalities should have all been
+ 		 * delivered via this one call.
+ 		 */
++#if CONFIG_KXLD && CONFIG_RPI
++		if (!daemon_ready && !sIOKitDaemonActive) {
++#else
+ 		if (!daemon_ready) {
++#endif
+ 			OSKext::setIOKitDaemonActive();
+ 			OSKext::setDeferredLoadSucceeded(TRUE);
+ 			IOService::iokitDaemonLaunched();
 diff --git a/xnu/libkern/conf/Makefile b/xnu/libkern/conf/Makefile
 index d6dceb52..424a390d 100644
 --- a/xnu/libkern/conf/Makefile

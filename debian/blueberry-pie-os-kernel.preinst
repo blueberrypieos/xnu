@@ -1,0 +1,31 @@
+#!/bin/sh
+set -e
+case "$1" in
+install|upgrade)
+	if [ -z "${DPKG_ROOT:-}" ] && [ "$(uname -s)" = Darwin ]; then
+		m=/var/db/blueberry-pie-os-kernel.unpacking
+		rm -f "$m.new"
+		session=$(sysctl -n kern.bootsessionuuid)
+		if [ -e "$m" ]; then
+			found=0
+			owner=$(grep -m 1 '^owner ' "$m") || found=$?
+			[ "$found" -le 1 ]
+			case $owner in
+			"owner $session $PPID"|"owner $session $PPID "*)
+				owner=
+				;;
+			esac
+			if [ -n "$owner" ]; then
+				printf '%s\n%s\n' "$session" "$owner" > "$m.new"
+			else
+				printf '%s\n' "$session" > "$m.new"
+			fi
+			mv "$m.new" "$m"
+		else
+			printf '%s\nowner %s %s %s %s\n' "$session" "$session" "$PPID" "${2-}" "${3-}" > "$m.new"
+			ln "$m.new" "$m"
+			rm -f "$m.new"
+		fi
+	fi
+	;;
+esac

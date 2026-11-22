@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+case "$1" in
+abort-install|abort-upgrade)
+	if [ -z "${DPKG_ROOT:-}" ] && [ "$(uname -s)" = Darwin ]; then
+		m=/var/db/blueberry-pie-os-kernel.unpacking
+		dpkg-trigger --no-await /usr/lib/blueberry-pie-os/kernels
+		if [ -e "$m" ]; then
+			session=$(sysctl -n kern.bootsessionuuid)
+			found=0
+			grep -qxF "owner $session $PPID ${2-} ${3-}" "$m" || found=$?
+			if [ "$found" = 0 ]; then
+				rm -f "$m"
+			elif [ "$found" != 1 ]; then
+				exit 1
+			fi
+		fi
+	fi
+	;;
+remove|purge)
+	if [ -z "${DPKG_ROOT:-}" ] && [ "$(uname -s)" = Darwin ]; then
+		rm -f /var/db/blueberry-pie-os-kernel.unpacking /var/db/blueberry-pie-os-kernel.unpacking.new
+	fi
+	;;
+esac

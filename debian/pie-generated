@@ -30,6 +30,7 @@ debian/build/*/dyld_version_defines.h
 debian/build/*/IOUserBlockStorageDevice.h
 debian/build/libs/cc_kext/arm64/profile_unsupported.o
 debian/build/root/usr/lib/blueberry-pie-os/kexts.early
+debian/build/root/usr/lib/blueberry-pie-os/kernels
 debian/build/kexts/*/PIE*.kext/Contents/Info.plist
 debian/build/root/System/Library/Extensions/PIE*.kext/Contents/Info.plist
 debian/build/kexts/GPIO/piegpio.kext/Contents/Info.plist

@@ -23,6 +23,7 @@ export PIE_XNU_SOURCE     := $(T)/xnu
 
 XNU_MAKE = env -u MAKEFLAGS -u MFLAGS -u MAKELEVEL JOBS=$(JOBS) $(TOOLCHAIN)/xnu-make -C $(T)/xnu ARCH_CONFIGS=ARM64 BUILD_LTO=0
 uc = $(shell echo $(1) | tr a-z A-Z)
+OTOOL := $(TOOLCHAIN)/prefix/bin/aarch64-apple-darwin-otool
 KERNEL = $(KB)/$(1)/obj/DEVELOPMENT_ARM64_$(call uc,$(1))/kernel.development.$(1)
 
 # kext NAME DIR SOURCES CXXFLAGS LIBDIRS
@@ -103,7 +104,16 @@ install:
 	set -e; for k in $(EARLY); do \
 		case $$k in *@pi) echo "$${k%@pi}.kext $(PI_SOCS)" ;; *) echo "$$k.kext" ;; esac; \
 	done > $(ROOT)/usr/lib/blueberry-pie-os/kexts.early
-	install -D -m 755 debian/blueberry-pie-os-kernel.postinst $(ROOT)/DEBIAN/postinst
+	set -e; for soc in $(SOCS); do \
+		SOC=$$(echo $$soc | tr a-z A-Z); \
+		uuid=$$($(OTOOL) -l $(KB)/$$soc/obj/DEVELOPMENT_ARM64_$$SOC/kernel.development.$$soc | \
+			awk '$$1 == "uuid" { print $$2; exit }'); \
+		[ -n "$$uuid" ]; \
+		echo "$$soc $$uuid"; \
+	done > $(ROOT)/usr/lib/blueberry-pie-os/kernels
+	set -e; for s in preinst postinst postrm; do \
+		install -D -m 755 debian/blueberry-pie-os-kernel.$$s $(ROOT)/DEBIAN/$$s; \
+	done
 	set -e; for p in blueberry-pie-os-kernel blueberry-pie-os-kernel-dev; do \
 		install -D -m 644 debian/README.source $(ROOT)/usr/share/doc/$$p/README.source; \
 	done

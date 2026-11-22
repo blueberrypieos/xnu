@@ -6,6 +6,7 @@
 #include <kern/startup.h>
 #include <libkern/libkern.h>
 #include <libkern/amfi/amfi.h>
+#include <libkern/OSKextLibPrivate.h>
 #include <sys/kauth.h>
 #include <sys/proc.h>
 
@@ -107,7 +108,8 @@ builtin_queryEntitlementBooleanWithProc(const proc_t proc, const char *entitleme
 	    strcmp(entitlement_name, "com.apple.private.vfs.system-volume-unmount") == 0) {
 		return proc_pid(proc) == 1 ? KERN_SUCCESS : KERN_NOT_FOUND;
 	}
-	if (strcmp(entitlement_name, IDENTITYSVC_ENTITLEMENT) != 0) {
+	if (strcmp(entitlement_name, IDENTITYSVC_ENTITLEMENT) != 0 &&
+	    strcmp(entitlement_name, kIOCatalogManagementEntitlement) != 0) {
 		return KERN_NOT_FOUND;
 	}
 	cred = kauth_cred_proc_ref(proc);

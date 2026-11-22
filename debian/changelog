@@ -16,14 +16,15 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
     boot in eight.
   * kern.version names each kernel's build again, such as
     DEVELOPMENT_ARM64_BCM2712, so /etc/rc finds the SoC and loads the
-    kexts.conf lines tagged for it.
+    kexts.early lines tagged for it.
   * The early kexts for the Raspberry Pi's devices load on its kernels
-    only.
+    only. PIEBoard.kext and PIECPUFreq.kext match the Pi's mailbox, so
+    kextd does not load them on the RK3566 either.
   * Kexts can drive USB devices through <pie/usb.h>. A bulk endpoint can
     keep its transfers queued, as a network adapter needs.
   * PIEUSBEthernet.kext drives USB Ethernet adapters with a Realtek
     RTL8152, RTL8153 or RTL8153B.
-    It is not an early kext: list it in /etc/kexts.conf to load it.
+    It is not an early kext: kextd loads it when an adapter appears.
   * The xHCI driver refuses a USB device whose device or configuration
     descriptor comes back short or with a bad header, and uses only the
     whole descriptors of its configuration.
@@ -34,6 +35,36 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
     setting, and says so to the controller.
   * Device-tree properties with names of 32 to 255 characters, which
     pieboot passes encoded, reach drivers under their full names.
+  * A root daemon checks in as the IOKit daemon with a DaemonReady
+    request. The kernel then releases the registry root, starts the
+    matching it held back and sends its kext load requests to kextd, so
+    kexts load when a device matches them. After a soft reboot the check-in
+    ends the reset that user space's restart began.
+  * Only the kexts that kextd loads, and the libraries its loads bring in,
+    even loads that fail, are unloaded when idle. The early kexts and kexts
+    loaded by hand stay loaded.
+  * getvfsbyname and lsvfs no longer spin for a file system that is not
+    registered. vfs.generic.maxtypenum was 1836016492, from mockfs's type
+    number, and now leaves it out. A file system that registers later
+    never lowers it.
+  * /usr/lib/blueberry-pie-os/kernels names each kernel's SoC and UUID, so
+    kextd knows the SoCs and whether the running kernel is installed.
+  * The preinst writes the boot session to
+    /var/db/blueberry-pie-os-kernel.unpacking, and it is removed when the
+    package is configured or removed. While it names the running boot,
+    kextd and kextload load no kext from /System/Library/Extensions that
+    is not loaded yet, as those may be the next kernel's. One from an
+    earlier boot means the package was left unfinished: the kexts then
+    load, with a warning, so that the boot partition can still be
+    written. An aborted install or upgrade removes only a marker its own
+    preinst made.
+  * The postinst writes the boot session to
+    /var/db/blueberry-pie-os-kernel.configured, so kextd and kextload
+    wait for the reboot when the kernel changed. The postinst, and an
+    aborted install or upgrade, have kextd scan again.
+  * Root may add and remove IOKit personalities in the IOCatalogue.
+  * The kernel depends on kext-tools 2, which has kextd, and on
+    base-files 6, whose rc starts it.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
 

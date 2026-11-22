@@ -8,7 +8,7 @@
 # one's symbol set.
 #
 # The kernel package carries it in /System/Library/Extensions. It is not an
-# early kext: list it in /etc/kexts.conf to load it at boot.
+# early kext: kextd loads it when an adapter appears.
 #
 #   make -C kexts/USBEthernet [KERNEL_BUILD=DIR] [IONETWORKING_KEXT_DIR=DIR] install
 
