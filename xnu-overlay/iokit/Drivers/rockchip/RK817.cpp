@@ -27,6 +27,8 @@ enum {
 	ADC_CONFIG0_GG_EN = 1U << 7, ADC_CONFIG0_BAT_VOL = 1U << 3, ADC_CONFIG0_BAT_CUR = 1U << 2,
 	CHRG_STS_BAT_EXISTS = 1U << 7, CHRG_STS_USB_EXISTS = 1U << 1, SYS_STS_PLUG_IN = 1U << 6,
 	POWER_EN_BOOST = 1,
+	PMIC_POWER_EN1 = 0xb2, PMIC_LDO1_ON_VSEL = 0xcc, LDOS = 9, LDO_ALL = (1U << LDOS) - 1,
+	LDO_VSEL = 0x7f, LDO_VSEL_MAX = 0x70, LDO_MIN_UV = 600000, LDO_STEP_UV = 25000,
 };
 
 /* The charger's state, CHRG_STS<6:4>. */
@@ -59,7 +61,9 @@ static const struct RK817Switch {
 };
 
 #define SWITCHES        (sizeof(rk817Switches) / sizeof(rk817Switches[0]))
-enum { FOLLOW_MS = 50, FOLLOW_TRIES = 3, BLIND_MS = 50, UNFOLLOW_MS = 2000 };
+enum { FOLLOW_MS = 50, FOLLOW_TRIES = 3, BLIND_MS = 50, UNFOLLOW_MS = 2000, LDO_SLOT_MS = 250 };
+enum { REFUSED_BOOST = 1, REFUSED_UNREAD = 2 };
+enum { SLOT_NONE, SLOT_OFF, SLOT_BOOST };
 #define OCV_POINTS      32
 
 struct RK817Report {
@@ -159,7 +163,7 @@ RK817Battery::report(const struct RK817Report *r)
 	updateStatus();
 }
 
-class RK817 : public IOService
+class RK817 : public RKRegulators
 {
 	OSDeclareDefaultStructors(RK817);
 
@@ -172,14 +176,27 @@ class RK817 : public IOService
 	IONotifier *haltNotifier;
 	uint32_t following, failing;
 	uint64_t blindUntil;
+	int lastUsb;
+	uint64_t ldoSlotNext;
 
 	RK817Battery *battery;
 	uint32_t senseMicroOhm, resistanceMicroOhm, designMicroAh;
 	uint32_t ocvPoints, ocvMicroVolt[OCV_POINTS], ocvPercent[OCV_POINTS];
 	int smoothedCharge, smoothedCurrent;
 	bool currentSeeded, gaugeLogged;
+	uint8_t ldoVsel[LDOS];
+	uint16_t ldoOn, ldoKnown;
+	uint8_t ldoRefused[LDOS];
 
 	IOReturn read(uint8_t reg, uint8_t *value);
+	unsigned ldo(IORegistryEntry *node);
+	bool switchesOff(void);
+	bool switchesKnown(void);
+	int ldoSlot(void);
+	bool readLDOs(void);
+	bool readLDO(unsigned n);
+	bool firstRefusal(unsigned n, uint8_t why);
+	void logLDOs(bool tried);
 	IOReturn setSwitch(const struct RK817Switch *sw, bool on);
 	int switchState(const struct RK817Switch *sw);
 	int usbPower(uint64_t until);
@@ -207,10 +224,12 @@ public:
 	virtual bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
 	virtual void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
 	virtual void free(void) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn setVoltage(IORegistryEntry *node, uint32_t microvolt) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn getVoltage(IORegistryEntry *node, uint32_t *microvolt) APPLE_KEXT_OVERRIDE;
 };
 
-#define super IOService
-OSDefineMetaClassAndStructors(RK817, IOService);
+#define super RKRegulators
+OSDefineMetaClassAndStructors(RK817, RKRegulators);
 
 IOReturn
 RK817::read(uint8_t reg, uint8_t *value)
@@ -258,9 +277,9 @@ RK817::usbPower(uint64_t until)
 }
 
 /*
- * The charger's USB power as usbPower reads it. blindUntil is BLIND_MS
- * after the start of the first of a run of checks that cannot read it, and
- * 0 while checks can.
+ * The charger's USB power as usbPower reads it, kept in lastUsb. blindUntil
+ * is BLIND_MS after the start of the first of a run of checks that cannot
+ * read it, and 0 while checks can.
  */
 int
 RK817::checkPower(void)
@@ -271,6 +290,7 @@ RK817::checkPower(void)
 	}
 	int usb = usbPower(until);
 	blindUntil = usb >= 0 ? 0 : until;
+	lastUsb = usb;
 	return usb;
 }
 
@@ -317,7 +337,8 @@ RK817::turnOff(const struct RK817Switch *sw, const char *why)
  * The switch turned on, unless it reads on already or cannot be read, and
  * only while the charger's USB power, read again just before the write,
  * is still absent. The write is made under lock, and not once stop has
- * begun, so none follows stop. That power is read once more just after:
+ * begun, so none follows stop. The switch's state is unknown from the
+ * write until it reads back. That power is read once more just after:
  * if it has come in between, the switch is turned off at once.
  */
 int
@@ -332,6 +353,7 @@ RK817::turnOn(const struct RK817Switch *sw)
 	bool stopped = stopping;
 	if (!stopped) {
 		setSwitch(sw, true);
+		*sw->state = -1;
 	}
 	IOLockUnlock(lock);
 	if (stopped) {
@@ -850,6 +872,287 @@ RK817::batteryThread(void *arg, wait_result_t wr)
 	me->threadDone();
 }
 
+#pragma mark Regulators
+
+/* The LDO's number, 1 to 9, of a node LDO_REG1 to LDO_REG9 of this PMIC's regulators; 0 for any other node. */
+unsigned
+RK817::ldo(IORegistryEntry *node)
+{
+	IORegistryEntry *group = node != NULL ? node->copyParentEntry(gIODTPlane) : NULL;
+	IORegistryEntry *pmic = group != NULL ? group->copyParentEntry(gIODTPlane) : NULL;
+	const char *name = node != NULL ? node->getName(gIODTPlane) : NULL;
+	const char *groupName = group != NULL ? group->getName(gIODTPlane) : NULL;
+	unsigned n = 0;
+	if (pmic != NULL && pmic == getProvider() && groupName != NULL && strcmp(groupName, "regulators") == 0 &&
+	    name != NULL && strncmp(name, "LDO_REG", 7) == 0 && name[7] >= '1' && name[7] <= '9' && name[8] == '\0') {
+		n = (unsigned)(name[7] - '0');
+	}
+	OSSafeReleaseNULL(pmic);
+	OSSafeReleaseNULL(group);
+	return n;
+}
+
+/*
+ * True while each switch that follows the charger's USB power reads off.
+ * turnOn marks a switch unknown as it writes it, under lock, so the
+ * switches stay off while a caller that found them off holds the lock.
+ */
+bool
+RK817::switchesOff(void)
+{
+	for (unsigned i = 0; i < SWITCHES; i++) {
+		if ((following & (1U << i)) && *rk817Switches[i].state != 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/* True while no switch that follows the charger's USB power is unknown, as while turnOn writes it. */
+bool
+RK817::switchesKnown(void)
+{
+	for (unsigned i = 0; i < SWITCHES; i++) {
+		if ((following & (1U << i)) && *rk817Switches[i].state < 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/*
+ * Under lock, when a call may make LDO transfers: SLOT_OFF at once while
+ * the switches that follow the charger's USB power read off; SLOT_BOOST,
+ * for two one-byte transfers at most, while BOOST reads on, the last check
+ * read no USB power and no switch is unknown, once LDO_SLOT_MS have passed
+ * since the last such slot began, waited for with the lock let go;
+ * SLOT_NONE otherwise, and once stop has begun.
+ */
+int
+RK817::ldoSlot(void)
+{
+	for (;;) {
+		if (stopping) {
+			return SLOT_NONE;
+		}
+		if (switchesOff()) {
+			return SLOT_OFF;
+		}
+		if (lastUsb != 0 || !switchesKnown()) {
+			return SLOT_NONE;
+		}
+		if (mach_absolute_time() >= ldoSlotNext) {
+			clock_interval_to_deadline(LDO_SLOT_MS, kMillisecondScale, &ldoSlotNext);
+			return SLOT_BOOST;
+		}
+		IOLockSleepDeadline(lock, &stopping, ldoSlotNext, THREAD_UNINT);
+	}
+}
+
+/*
+ * The LDOs' enables and active voltages read into ldoOn and ldoVsel, under
+ * lock: POWER_EN1 to POWER_EN3, then LDO1_ON_VSEL to LDO9_ON_VSEL. Bit n-1
+ * of ldoKnown says whether LDO n's hold.
+ */
+bool
+RK817::readLDOs(void)
+{
+	uint8_t en[3], v[2 * LDOS - 1];
+	bool ok = bus->readRegisters(address, PMIC_POWER_EN1, en, sizeof(en)) == kIOReturnSuccess &&
+	    bus->readRegisters(address, PMIC_LDO1_ON_VSEL, v, sizeof(v)) == kIOReturnSuccess;
+	ldoKnown = ok ? LDO_ALL : 0;
+	if (ok) {
+		ldoOn = (uint16_t)((en[0] & 0xf) | (en[1] & 0xf) << 4 | (en[2] & 1) << 8);
+		for (unsigned i = 0; i < LDOS; i++) {
+			ldoVsel[i] = v[2 * i];
+		}
+	}
+	return ok;
+}
+
+/* LDO n's enable and active voltage read into the copy, under lock, in two one-byte transfers. */
+bool
+RK817::readLDO(unsigned n)
+{
+	uint8_t en, v;
+	uint16_t bit = (uint16_t)(1U << (n - 1));
+	if (read((uint8_t)(PMIC_POWER_EN1 + (n - 1) / 4), &en) != kIOReturnSuccess ||
+	    read((uint8_t)(PMIC_LDO1_ON_VSEL + 2 * (n - 1)), &v) != kIOReturnSuccess) {
+		ldoKnown &= (uint16_t)~bit;
+		return false;
+	}
+	ldoOn = (uint16_t)((ldoOn & ~bit) | (((en >> ((n - 1) % 4)) & 1) << (n - 1)));
+	ldoVsel[n - 1] = v;
+	ldoKnown |= bit;
+	return true;
+}
+
+/*
+ * Whether a call on LDO n refused for why, or 0 if it was not refused,
+ * starts a run of refusals for that reason, under lock; only that call
+ * logs it.
+ */
+bool
+RK817::firstRefusal(unsigned n, uint8_t why)
+{
+	bool first = why != 0 && ldoRefused[n - 1] != why;
+	ldoRefused[n - 1] = why;
+	return first;
+}
+
+/*
+ * The LDOs' registers are read at start and kept, and getVoltage answers
+ * from them. setVoltage writes and reads back. A call's transfers, and
+ * reads that refill an LDO's registers once a transfer has failed, are
+ * made under lock in a slot that ldoSlot gives: at once while the switches
+ * that follow the charger's USB power read off, and while BOOST is on and
+ * the charger has no USB power, in slots of two one-byte transfers at
+ * least 250 ms apart. So within BOOST's bound they delay the follower by
+ * at most one such slot. A call that gets no slot is refused with
+ * kIOReturnBusy, and so is one whose refill fails. A write that waited for
+ * its slot checks the copy again: one that another call cleared meanwhile
+ * is read again in the slot while BOOST is off, and the call is refused
+ * while it is on, for its caller to try again. A write whose read-back
+ * confirms it marks the copy known. The first call of a run of refusals on
+ * an LDO logs why. Every call is refused once stop has begun.
+ */
+IOReturn
+RK817::getVoltage(IORegistryEntry *node, uint32_t *microvolt)
+{
+	unsigned n = ldo(node);
+	if (n == 0) {
+		return kIOReturnUnsupported;
+	}
+	uint16_t bit = (uint16_t)(1U << (n - 1));
+	IOLockLock(lock);
+	IOReturn ret = kIOReturnSuccess;
+	uint8_t why = 0;
+	if (!stopping && !(ldoKnown & bit)) {
+		int slot = ldoSlot();
+		if (slot == SLOT_NONE) {
+			ret = kIOReturnBusy;
+			why = REFUSED_BOOST;
+		} else if (!(slot == SLOT_OFF ? readLDOs() : readLDO(n))) {
+			ret = kIOReturnBusy;
+			why = REFUSED_UNREAD;
+		}
+	}
+	if (stopping) {
+		ret = kIOReturnOffline;
+		why = 0;
+	}
+	uint32_t code = ldoVsel[n - 1] & LDO_VSEL;
+	bool on = (ldoOn >> (n - 1)) & 1;
+	bool log = firstRefusal(n, why);
+	IOLockUnlock(lock);
+	if (log) {
+		IOLog("RK817: LDO%u not read %s\n", n, why == REFUSED_UNREAD ? "as the LDO registers did not read" :
+		    "while BOOST may be on");
+	}
+	if (ret == kIOReturnSuccess) {
+		*microvolt = !on ? 0 : LDO_MIN_UV + LDO_STEP_UV * (code < LDO_VSEL_MAX ? code : LDO_VSEL_MAX);
+	}
+	return ret;
+}
+
+/*
+ * An LDO's active voltage, in 25 mV steps from 0.6 V to 3.4 V within the
+ * node's limits; its current limit is kept. An LDO that is off is left
+ * off, with kIOReturnNotReady.
+ */
+IOReturn
+RK817::setVoltage(IORegistryEntry *node, uint32_t microvolt)
+{
+	unsigned n = ldo(node);
+	uint32_t low, high;
+	if (n == 0) {
+		return kIOReturnUnsupported;
+	}
+	if (!dtNumber(node, "regulator-min-microvolt", &low) || !dtNumber(node, "regulator-max-microvolt", &high) ||
+	    microvolt < low || microvolt > high || microvolt < LDO_MIN_UV ||
+	    microvolt > LDO_MIN_UV + LDO_STEP_UV * LDO_VSEL_MAX || (microvolt - LDO_MIN_UV) % LDO_STEP_UV != 0) {
+		return kIOReturnBadArgument;
+	}
+	uint8_t reg = (uint8_t)(PMIC_LDO1_ON_VSEL + 2 * (n - 1));
+	uint8_t code = (uint8_t)((microvolt - LDO_MIN_UV) / LDO_STEP_UV), v;
+	uint16_t bit = (uint16_t)(1U << (n - 1));
+	IOLockLock(lock);
+	IOReturn ret = kIOReturnSuccess;
+	uint8_t why = 0;
+	if (!stopping && !(ldoKnown & bit)) {
+		int slot = ldoSlot();
+		if (slot == SLOT_NONE) {
+			ret = kIOReturnBusy;
+			why = REFUSED_BOOST;
+		} else if (!(slot == SLOT_OFF ? readLDOs() : readLDO(n))) {
+			ret = kIOReturnBusy;
+			why = REFUSED_UNREAD;
+		}
+	}
+	int slot = SLOT_NONE;
+	if (ret == kIOReturnSuccess && !stopping && (ldoOn & bit) && (ldoVsel[n - 1] & LDO_VSEL) != code) {
+		slot = ldoSlot();
+		if (slot == SLOT_NONE) {
+			ret = kIOReturnBusy;
+			why = REFUSED_BOOST;
+		} else if (!(ldoKnown & bit) && !(slot == SLOT_OFF && readLDOs())) {
+			ret = kIOReturnBusy;
+			why = slot == SLOT_OFF ? REFUSED_UNREAD : REFUSED_BOOST;
+		}
+	}
+	if (ret == kIOReturnSuccess && !stopping && !(ldoOn & bit)) {
+		ret = kIOReturnNotReady;
+	} else if (ret == kIOReturnSuccess && !stopping && slot != SLOT_NONE && (ldoVsel[n - 1] & LDO_VSEL) != code) {
+		v = (uint8_t)((ldoVsel[n - 1] & ~LDO_VSEL) | code);
+		ret = bus->writeRegisters(address, reg, &v, 1);
+		if (ret == kIOReturnSuccess) {
+			ret = read(reg, &v);
+		}
+		if (ret == kIOReturnSuccess) {
+			ldoVsel[n - 1] = v;
+			ldoKnown |= bit;
+			ret = (v & LDO_VSEL) == code ? kIOReturnSuccess : kIOReturnIOError;
+		} else {
+			ldoKnown &= (uint16_t)~bit;
+		}
+	}
+	if (stopping) {
+		ret = kIOReturnOffline;
+		why = 0;
+	}
+	bool log = firstRefusal(n, why);
+	IOLockUnlock(lock);
+	if (log) {
+		IOLog("RK817: LDO%u left as it is %s\n", n,
+		    why == REFUSED_UNREAD ? "as the LDO registers did not read" : "while BOOST may be on");
+	} else if (ret == kIOReturnNotReady) {
+		IOLog("RK817: LDO%u is off, and is left off\n", n);
+	}
+	return ret;
+}
+
+/* The LDOs' enables and active voltages as start read them, or why it did not. */
+void
+RK817::logLDOs(bool tried)
+{
+	if (ldoKnown != LDO_ALL) {
+		IOLog("RK817: the LDOs %s\n", tried ? "cannot be read" : "are not read while BOOST may be on");
+		return;
+	}
+	char line[80];
+	size_t at = 0;
+	for (unsigned i = 0; i < LDOS && at < sizeof(line); i++) {
+		uint32_t code = ldoVsel[i] & LDO_VSEL;
+		if ((ldoOn >> i) & 1) {
+			at += (size_t)snprintf(line + at, sizeof(line) - at, " %u",
+			    (LDO_MIN_UV + LDO_STEP_UV * (code < LDO_VSEL_MAX ? code : LDO_VSEL_MAX)) / 1000);
+		} else {
+			at += (size_t)snprintf(line + at, sizeof(line) - at, " off");
+		}
+	}
+	IOLog("RK817: LDO1 to LDO9 at%s mV\n", line);
+}
+
 #pragma mark IOService
 
 bool
@@ -862,6 +1165,7 @@ RK817::start(IOService *provider)
 	if (lock == NULL) {
 		return false;
 	}
+	lastUsb = -1;
 	bus = OSDynamicCast(RKI2C, provider->getProvider());
 	OSData *reg = OSDynamicCast(OSData, provider->getProperty("pieboot,bus-reg"));
 	uint64_t a = reg != NULL && reg->getLength() >= 16 ? *(const uint64_t *)reg->getBytesNoCopy() : ~0ULL;
@@ -920,6 +1224,20 @@ RK817::start(IOService *provider)
 		}
 	}
 	OSSafeReleaseNULL(regulators);
+
+	/*
+	 * The LDOs' registers are read while the switches read off, or once the
+	 * check above has read the charger's status without USB power: USB
+	 * power that comes after that check meets fewer of start's transfers,
+	 * these two included, than its bound for BOOST counts.
+	 */
+	IOLockLock(lock);
+	bool tried = switchesOff() || usb == 0;
+	if (tried) {
+		readLDOs();
+	}
+	IOLockUnlock(lock);
+	logLDOs(tried);
 
 	if (following != 0 && !startThread(&RK817::follow)) {
 		IOLog("RK817: no thread to follow the charger's USB power\n");

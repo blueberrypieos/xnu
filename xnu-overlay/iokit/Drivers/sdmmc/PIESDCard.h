@@ -62,6 +62,7 @@ protected:
 	virtual IOReturn sdReadSmall(uint32_t index, uint32_t arg, uint8_t *data, uint32_t bytes) = 0;
 	virtual IOReturn sdTransfer(uint32_t index, uint32_t arg, uint32_t count, bool write) = 0;
 
+	/* Sets the card up and logs it; a host may call it again. */
 	bool sdStart(void);
 	bool sdInitCard(void);
 	IOReturn sdAppCommand(uint32_t index, uint32_t arg, SDResponse type, uint32_t resp[4]);

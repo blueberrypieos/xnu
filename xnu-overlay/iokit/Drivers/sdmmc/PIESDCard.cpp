@@ -183,7 +183,9 @@ PIESDCard::sdSetUpHighSpeed(const uint8_t *reference, const char *bootArg)
 bool
 PIESDCard::sdStart(void)
 {
-	sdLock = IOLockAlloc();
+	if (sdLock == NULL) {
+		sdLock = IOLockAlloc();
+	}
 	if (sdLock == NULL || sdBounce == NULL) {
 		return false;
 	}

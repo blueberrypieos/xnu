@@ -23,6 +23,26 @@ enum {
 #define RK_PMUCRU_GATE(i)       (0x180 + (i) * 4)
 #define RK_PMUCRU_SOFTRST(i)    (0x200 + (i) * 4)
 
+/*
+ * A PMIC's regulators, named by their device tree nodes. setVoltage sets
+ * one and reads it back, and refuses a voltage outside the node's
+ * regulator-min-microvolt and regulator-max-microvolt, and a regulator
+ * that is off. getVoltage reads one, 0 if it is off. Both may use the
+ * PMIC's bus, so they are not for interrupt context, and a driver may
+ * refuse them for a time with kIOReturnBusy.
+ * RKFindRegulators returns the driver of a regulator node, retained, and
+ * waits up to ms for it to start; NULL if none has started by then.
+ */
+class RKRegulators : public IOService
+{
+	OSDeclareAbstractStructors(RKRegulators);
+
+public:
+	virtual IOReturn setVoltage(IORegistryEntry *node, uint32_t microvolt) = 0;
+	virtual IOReturn getVoltage(IORegistryEntry *node, uint32_t *microvolt) = 0;
+};
+
+RKRegulators *RKFindRegulators(IORegistryEntry *node, uint32_t ms);
 IOMemoryMap *RKMapNode(IORegistryEntry *node);
 IOMemoryMap *RKMapCompatible(const char *compat);
 IOMemoryMap *RKMapPHandle(uint32_t phandle);

@@ -7,7 +7,9 @@
 #include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOKitKeys.h>
 #include <IOKit/IOLib.h>
+#include <kern/clock.h>
 #include <libkern/OSByteOrder.h>
+#include <mach/mach_time.h>
 
 #include "../rpi/RPiPlatform.h"
 #include "RKSoC.h"
@@ -251,4 +253,42 @@ RKStartThread(OSObject *owner, void (*fn)(void *, wait_result_t))
 	}
 	thread_deallocate(thread);
 	return true;
+}
+
+OSDefineMetaClassAndAbstractStructors(RKRegulators, IOService);
+
+/*
+ * The driver whose provider is the regulator node's PMIC, the parent of
+ * the node's parent, looked for every 50 ms and once more at the end. The
+ * PMIC's node is replaced by its nub when its bus starts, so it is found
+ * again each time.
+ */
+RKRegulators *
+RKFindRegulators(IORegistryEntry *node, uint32_t ms)
+{
+	OSDictionary *match = IOService::serviceMatching("RKRegulators");
+	RKRegulators *found = NULL;
+	uint64_t deadline;
+	clock_interval_to_deadline(ms, kMillisecondScale, &deadline);
+	for (bool last = false; match != NULL && found == NULL && !last;) {
+		last = mach_absolute_time() >= deadline;
+		IORegistryEntry *group = node->copyParentEntry(gIODTPlane);
+		IORegistryEntry *pmic = group != NULL ? group->copyParentEntry(gIODTPlane) : NULL;
+		OSIterator *it = pmic != NULL ? IOService::getMatchingServices(match) : NULL;
+		for (OSObject *o; it != NULL && found == NULL && (o = it->getNextObject()) != NULL;) {
+			RKRegulators *r = OSDynamicCast(RKRegulators, o);
+			if (r != NULL && r->getProvider() == pmic) {
+				found = r;
+				found->retain();
+			}
+		}
+		OSSafeReleaseNULL(it);
+		OSSafeReleaseNULL(pmic);
+		OSSafeReleaseNULL(group);
+		if (found == NULL && !last) {
+			IOSleep(50);
+		}
+	}
+	OSSafeReleaseNULL(match);
+	return found;
 }

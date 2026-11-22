@@ -82,6 +82,25 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
   * The RK817's charger and gas gauge show as a battery, RK817Battery,
     and as sysctls under hw.battery. On the RG353V the charger's USB
     input limit is set to 1.5 A.
+  * The RK3566's SD card driver sets the card's IO supply and IO domain
+    itself, and never lowers the supply toward 1.8 V. A card in 1.8 V
+    signaling is kept at a supply the boot left at 1.8 V, without CMD11.
+    Any other card or supply goes to 3.3 V. A card in 1.8 V signaling at
+    another supply is left unused until the board is switched off and on.
+    The RK817 driver sets the supply while BOOST is off, or while BOOST is
+    on without USB power, in short slots that keep BOOST's bound. An
+    orderly reboot of the RG353V's stock Linux leaves the second slot's IO
+    supply at 0.6 V, where no card answered.
+  * The RK3566's SD card driver waits to deadlines on the clock. Its waits
+    counted IODelay's steps, which sleep on this kernel, so a wait could
+    last far longer than it counted. A data transfer fails once its FIFO
+    has not moved for 2 s. A card has 10 s to finish a write, and 10 s
+    to leave its programming state after a failed transfer.
+  * The RK3566's SD card driver logs its errors with the controller's
+    status and their times, a FIFO reset that fails, and the steps of a
+    recovery that does not end at its first try. It logs the controller's
+    registers every 5 s while a transfer is out. The RK817 driver logs
+    its LDOs' voltages at start.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
 
