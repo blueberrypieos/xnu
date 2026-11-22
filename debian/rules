@@ -71,6 +71,7 @@ install:
 	$(call KEXT,piegpio,GPIO,PieGPIOController.cpp PieGPIOUserClient.cpp PieGPIOBCM2711.cpp PieGPIORP1.cpp \
 		PieGPIOBrcmstb.cpp,$(PIEGPIO))
 	$(call KEXT,PIEEthernet,Ethernet,RPiGENET.cpp RPiGEM.cpp RPiPHY.cpp VirtioMMIONet.cpp,,$(KX)/IONetworkingFamily)
+	$(call KEXT,PIEUSBEthernet,USBEthernet,RTLUSBEthernet.cpp,-Wall -Werror -Wno-inconsistent-missing-override,$(KX)/IONetworkingFamily)
 	$(call KEXT,PIERTC,RTC,RPiRTC.cpp)
 	$(call KEXT,PIERandom,Random,RPiRNG200.cpp)
 	$(call KEXT,PIESerial,Serial,RPiPL011Serial.cpp,$(PIEGPIO),$(KX)/IOSerialFamily)
@@ -95,7 +96,7 @@ install:
 	fi
 	set -e; for k in IONetworkingFamily/IONetworkingFamily msdosfs/msdosfs Ethernet/PIEEthernet Thermal/PIEThermal \
 		Random/PIERandom Watchdog/PIEWatchdog RTC/PIERTC IOSerialFamily/IOSerialFamily Serial/PIESerial \
-		CPUFreq/PIECPUFreq Board/PIEBoard DMA/PIEDMA GPIO/piegpio; do \
+		CPUFreq/PIECPUFreq Board/PIEBoard DMA/PIEDMA GPIO/piegpio USBEthernet/PIEUSBEthernet; do \
 		cp -R $(KX)/$$k.kext $(ROOT)/$(EXT)/; \
 	done
 	install -d $(ROOT)/usr/lib/blueberry-pie-os

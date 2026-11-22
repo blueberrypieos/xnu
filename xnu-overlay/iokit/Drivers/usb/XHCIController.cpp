@@ -27,6 +27,7 @@ enum {
 
 enum {
 	USBCMD_RS = 1U << 0, USBCMD_HCRST = 1U << 1, USBCMD_INTE = 1U << 2,
+	CRCR_CA = 1U << 2, CRCR_CRR = 1U << 3, CRCR_RSVD = 3U << 4,
 	USBSTS_HCH = 1U << 0, USBSTS_EINT = 1U << 3, USBSTS_PCD = 1U << 4, USBSTS_CNR = 1U << 11,
 	IMAN_IP = 1U << 0, IMAN_IE = 1U << 1,
 	ERDP_EHB = 1U << 3,
@@ -45,8 +46,8 @@ enum {
 	TRB_ENABLE_SLOT = 9, TRB_ADDRESS_DEVICE = 11, TRB_CONFIGURE_EP = 12, TRB_EVALUATE_CONTEXT = 13,
 	TRB_EV_TRANSFER = 32, TRB_EV_COMMAND = 33, TRB_EV_PORT = 34,
 
-	TRB_DISABLE_SLOT = 10, TRB_RESET_EP = 14, TRB_STOP_EP = 15, TRB_SET_TR_DEQUEUE = 16,
-	CC_SUCCESS = 1, CC_STALL = 6, CC_SHORT_PACKET = 13,
+	TRB_DISABLE_SLOT = 10, TRB_RESET_EP = 14, TRB_STOP_EP = 15, TRB_SET_TR_DEQUEUE = 16, TRB_NOOP_CMD = 23,
+	CC_SUCCESS = 1, CC_STALL = 6, CC_SHORT_PACKET = 13, CC_RING_STOPPED = 24, CC_COMMAND_ABORTED = 25,
 	CC_GONE = 0x100,
 
 	EP_STATE_RUNNING = 1, EP_STATE_HALTED = 2,
@@ -70,6 +71,8 @@ struct TRB {
 #define MAX_SLOTS       32
 #define MAX_DCI         32
 #define CMD_TIMEOUT_MS  2000
+#define ABORT_TIMEOUT_MS 5000
+#define WAIT_RING_STOPPED 1
 #define BULK_TIMEOUT_MS 10000
 #define DMA_FREE_MAX    128
 
@@ -101,15 +104,38 @@ struct BulkPipe {
 	struct PIEUSBEndpoint ep;
 };
 
+#define QUEUE_BUFFERS_MAX      32
+#define QUEUE_BYTES_MAX        (256 * 1024)
+#define QUEUE_NONE             0xff
+#define QUEUE_NO_EVENT         0x80
+
+struct BulkQueue {
+	struct Ring ring;
+	IOBufferMemoryDescriptor *mem;
+	IOMemoryMap *map;
+	uint8_t *buffers;
+	uint64_t buffersPhys;
+	uint32_t size, count, dci;
+	uint32_t busy;
+	bool in, halted;
+	struct PIEUSBEndpoint ep;
+	OSObject *target;
+	PIEUSBQueueAction action;
+	uint32_t lengths[QUEUE_BUFFERS_MAX];
+	uint8_t owner[RING_TRBS];
+	struct BulkQueue *next;
+};
+
 struct Device {
 	bool used;
 	bool gone;
+	bool broken;
+	bool timedOut;
 	uint32_t generation;
 	uint8_t port, speed;
 	uint32_t route;
 	uint8_t depth;
 	uint8_t ttSlot, ttPort;
-	bool ttMulti;
 	bool isHub;
 	uint8_t hubPorts;
 	uint8_t hubChild[HUB_PORTS + 1];
@@ -122,8 +148,21 @@ struct Device {
 	uint64_t ep0BufPhys;
 	struct InterruptPipe *pipes[MAX_DCI];
 	struct BulkPipe *bulk[MAX_DCI];
+	struct BulkQueue *queues[MAX_DCI];
+	struct BulkQueue *dead;
 	uint8_t maxDCI;
 };
+
+static bool
+kept_queue(const struct Device *d, uint32_t dci)
+{
+	for (const struct BulkQueue *s = d->dead; s != NULL; s = s->next) {
+		if (s->dci == dci) {
+			return true;
+		}
+	}
+	return false;
+}
 
 class XHCIController : public IOService
 {
@@ -160,10 +199,14 @@ class XHCIController : public IOService
 
 	IOLock *waitLock;
 	IOLock *cmdLock;
-	uint64_t waitTRB;
+	uint64_t waitTRB, waitData;
 	uint32_t waitOnSlot, waitOnDCI;
 	bool waitDone;
-	uint32_t waitCode, waitSlot, waitResidual;
+	uint32_t waitCode, waitResidual, waitDataResidual;
+	uint64_t cmdTRB;
+	uint32_t cmdCode, cmdSlot, cmdConsumer;
+	bool cmdDone;
+	bool cmdDead;
 
 	IOLock *portLock;
 	bool portsChanged;
@@ -182,16 +225,27 @@ class XHCIController : public IOService
 	void freeDMA(void *virt, uint64_t phys, size_t size);
 	void freePipe(struct InterruptPipe *pipe);
 	void freeBulk(struct BulkPipe *pipe);
-	bool current(uint32_t slot, uint32_t generation)
-	{
-		return slot >= 1 && slot <= MAX_SLOTS && devices[slot].used && !devices[slot].gone &&
-		       (generation == 0 || devices[slot].generation == generation);
-	}
+	void freeQueue(struct BulkQueue *s);
+	static IOReturn gatedQueueKeep(OSObject *owner, void *queue, void *slot, void *arg2, void *arg3);
+	static IOReturn gatedPipeStart(OSObject *owner, void *pipe, void *slot, void *dci, void *arg3);
+	void queueIn(struct BulkQueue *s, uint32_t b);
+	void queueEvent(uint32_t slot, struct BulkQueue *s, uint64_t trb, uint32_t code, uint32_t residual);
+	static IOReturn gatedQueueStart(OSObject *owner, void *queue, void *slot, void *arg2, void *arg3);
+	static IOReturn gatedQueueTake(OSObject *owner, void *slot, void *dci, void *generation, void *out);
+	static IOReturn gatedQueueOut(OSObject *owner, void *args, void *arg1, void *arg2, void *arg3);
+	static IOReturn gatedEvents(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3);
 	void initRing(struct Ring *ring);
 	uint64_t ringPut(struct Ring *ring, uint64_t param, uint32_t status, uint32_t control);
 	IOReturn command(uint64_t param, uint32_t status, uint32_t control, uint32_t *slotOut);
-	IOReturn waitFor(uint32_t timeoutMS, uint32_t *code, uint32_t *residual);
-	void expect(uint64_t trb, uint32_t slot, uint32_t dci);
+	IOReturn commandLocked(uint64_t param, uint32_t status, uint32_t control, uint32_t *slotOut);
+	IOReturn addEndpointLocked(uint32_t slot, uint32_t dci, uint32_t type, const struct PIEUSBEndpoint *ep,
+	    uint64_t dequeue, uint32_t interval, uint32_t avgTRB, bool replace);
+	IOReturn waitFor(uint32_t timeoutMS, uint32_t *code, uint32_t *residual, uint32_t *dataResidual = NULL);
+	IOReturn abortCommandLocked(uint64_t trb);
+	void noOpCommand(uint32_t index);
+	bool roomForCommandLocked(void);
+	IOReturn stopEndpointLocked(uint32_t slot, uint32_t dci);
+	void expect(uint64_t trb, uint32_t slot, uint32_t dci, uint64_t data = 0);
 	uint32_t *slotContext(uint8_t *ctx, bool input) { return (uint32_t *)(void *)(ctx + (input ? ctxSize : 0)); }
 	uint32_t *endpointContext(uint8_t *ctx, bool input, unsigned dci)
 	{
@@ -207,13 +261,21 @@ class XHCIController : public IOService
 	uint32_t attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, uint8_t speed, uint32_t parentSlot,
 	    uint8_t parentPort);
 	void detachDevice(uint32_t slot);
-	void setupHub(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, uint32_t cfgLength);
+	IOReturn controlReadExact(uint32_t slot, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
+	    uint16_t wIndex, uint16_t wLength, void *data);
+	void setupHub(uint32_t slot, const uint8_t *cfg, uint32_t cfgLength);
 	void scanHub(uint32_t slot);
 	void publishInterfaces(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, uint32_t cfgLength);
 
 public:
 	virtual bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
 	virtual void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
+
+	bool current(uint32_t slot, uint32_t generation)
+	{
+		return slot >= 1 && slot <= MAX_SLOTS && devices[slot].used && !devices[slot].gone &&
+		       !devices[slot].broken && (generation == 0 || devices[slot].generation == generation);
+	}
 
 	IOReturn controlTransfer(uint32_t slot, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
 	    uint16_t wIndex, uint16_t wLength, void *data, uint32_t *actual, uint32_t generation = 0);
@@ -222,8 +284,11 @@ public:
 	IOReturn bulkTransfer(uint32_t slot, const struct PIEUSBEndpoint *ep, void *data, uint32_t length,
 	    uint32_t *actual, uint32_t generation = 0);
 	IOReturn resetPipe(uint32_t slot, uint8_t endpointAddress, uint32_t generation = 0);
-	IOReturn addEndpoint(uint32_t slot, uint32_t dci, uint32_t type, const struct PIEUSBEndpoint *ep,
-	    uint64_t dequeue, uint32_t interval, uint32_t avgTRB, bool replace);
+	IOReturn startQueue(uint32_t slot, const struct PIEUSBEndpoint *ep, uint32_t size, uint32_t count,
+	    OSObject *target, PIEUSBQueueAction action, uint32_t generation);
+	IOReturn queueOut(uint32_t slot, uint8_t endpointAddress, const void *data, uint32_t length,
+	    uint32_t generation);
+	IOReturn stopQueue(uint32_t slot, uint8_t endpointAddress, uint32_t generation);
 };
 
 #define super IOService
@@ -245,7 +310,7 @@ XHCIController::allocDMA(size_t size, size_t align, uint64_t *phys)
 		}
 	}
 	if (virt == NULL) {
-		size_t start = (poolUsed + align - 1) & ~(align - 1);
+		size_t start = (size_t)(((poolPhys + poolUsed + align - 1) & ~(uint64_t)(align - 1)) - poolPhys);
 		if (start + size <= POOL_SIZE) {
 			poolUsed = start + size;
 			virt = pool + start;
@@ -308,16 +373,18 @@ XHCIController::ringPut(struct Ring *ring, uint64_t param, uint32_t status, uint
 #pragma mark Commands and completions
 
 void
-XHCIController::expect(uint64_t trb, uint32_t slot, uint32_t dci)
+XHCIController::expect(uint64_t trb, uint32_t slot, uint32_t dci, uint64_t data)
 {
 	waitDone = false;
 	waitTRB = trb;
 	waitOnSlot = slot;
 	waitOnDCI = dci;
+	waitData = data;
+	waitDataResidual = 0;
 }
 
 IOReturn
-XHCIController::waitFor(uint32_t timeoutMS, uint32_t *code, uint32_t *residual)
+XHCIController::waitFor(uint32_t timeoutMS, uint32_t *code, uint32_t *residual, uint32_t *dataResidual)
 {
 	IOLockLock(waitLock);
 	uint64_t deadline;
@@ -332,7 +399,11 @@ XHCIController::waitFor(uint32_t timeoutMS, uint32_t *code, uint32_t *residual)
 	if (residual != NULL) {
 		*residual = waitResidual;
 	}
+	if (dataResidual != NULL) {
+		*dataResidual = waitDataResidual;
+	}
 	waitTRB = 0;
+	waitData = 0;
 	waitDone = false;
 	IOLockUnlock(waitLock);
 	return done ? kIOReturnSuccess : kIOReturnTimeout;
@@ -342,25 +413,169 @@ IOReturn
 XHCIController::command(uint64_t param, uint32_t status, uint32_t control, uint32_t *slotOut)
 {
 	IOLockLock(cmdLock);
+	IOReturn ret = commandLocked(param, status, control, slotOut);
+	IOLockUnlock(cmdLock);
+	return ret;
+}
+
+IOReturn
+XHCIController::commandLocked(uint64_t param, uint32_t status, uint32_t control, uint32_t *slotOut)
+{
+	if (cmdDead) {
+		return kIOReturnNotResponding;
+	}
+	if (!roomForCommandLocked()) {
+		IOLog("XHCI: the command ring is full\n");
+		return kIOReturnNoResources;
+	}
 	IOLockLock(waitLock);
-	expect(ringPut(&cmdRing, param, status, control), 0, 0);
+	uint64_t trb = ringPut(&cmdRing, param, status, control);
+	cmdTRB = trb;
+	cmdDone = false;
+	expect(trb, 0, 0);
 	IOLockUnlock(waitLock);
 	w32(db, 0, 0);
 	uint32_t code = 0;
 	IOReturn ret = waitFor(CMD_TIMEOUT_MS, &code, NULL);
-	if (slotOut != NULL) {
-		*slotOut = waitSlot;
-	}
-	IOLockUnlock(cmdLock);
 	if (ret != kIOReturnSuccess) {
-		IOLog("XHCI: command type %u timed out\n", (control >> TRB_TYPE_SHIFT) & 0x3f);
-		return ret;
+		workLoop->runAction(&XHCIController::gatedEvents, this);
+		IOLockLock(waitLock);
+		if (cmdDone) {
+			ret = kIOReturnSuccess;
+		}
+		IOLockUnlock(waitLock);
 	}
+	if (ret != kIOReturnSuccess) {
+		uint32_t slot = control >> 24;
+		IOLog("XHCI: command type %u timed out\n", (control >> TRB_TYPE_SHIFT) & 0x3f);
+		ret = abortCommandLocked(trb);
+		if (ret == kIOReturnNotResponding) {
+			IOLog("XHCI: the command ring did not stop; the controller takes no more commands\n");
+			cmdDead = true;
+			for (uint32_t i = 1; i <= MAX_SLOTS; i++) {
+				devices[i].broken = devices[i].broken || devices[i].used;
+			}
+			if (slot >= 1 && slot <= MAX_SLOTS && devices[slot].used) {
+				devices[slot].timedOut = true;
+			}
+			return kIOReturnTimeout;
+		}
+		if (ret != kIOReturnSuccess) {
+			return ret;
+		}
+	}
+	IOLockLock(waitLock);
+	code = cmdCode;
+	if (slotOut != NULL) {
+		*slotOut = cmdSlot;
+	}
+	IOLockUnlock(waitLock);
 	if (code != CC_SUCCESS) {
 		IOLog("XHCI: command type %u failed, completion code %u\n", (control >> TRB_TYPE_SHIFT) & 0x3f, code);
 		return kIOReturnError;
 	}
 	return kIOReturnSuccess;
+}
+
+IOReturn
+XHCIController::abortCommandLocked(uint64_t trb)
+{
+	if (r32(op, OP_USBSTS) & USBSTS_HCH) {
+		return kIOReturnNotResponding;
+	}
+	uint32_t crcr = r32(op, OP_CRCR);
+	if (crcr & CRCR_CRR) {
+		IOLockLock(waitLock);
+		expect(WAIT_RING_STOPPED, 0, 0);
+		IOLockUnlock(waitLock);
+		w64(op, OP_CRCR, (cmdRing.phys + (cmdRing.enqueue & ~3U) * sizeof(struct TRB)) | (crcr & CRCR_RSVD) |
+		    cmdRing.cycle | CRCR_CA);
+		for (uint32_t ms = 0; (r32(op, OP_CRCR) & CRCR_CRR) && ms < ABORT_TIMEOUT_MS; ms++) {
+			IOSleep(1);
+		}
+		if ((r32(op, OP_CRCR) & CRCR_CRR) || (r32(op, OP_USBSTS) & USBSTS_HCH)) {
+			IOLockLock(waitLock);
+			waitTRB = 0;
+			IOLockUnlock(waitLock);
+			return kIOReturnNotResponding;
+		}
+		uint32_t code = 0;
+		waitFor(CMD_TIMEOUT_MS, &code, NULL);
+		if (r32(op, OP_USBSTS) & USBSTS_HCH) {
+			return kIOReturnNotResponding;
+		}
+	}
+	workLoop->runAction(&XHCIController::gatedEvents, this);
+	IOLockLock(waitLock);
+	bool done = cmdDone && cmdCode != CC_COMMAND_ABORTED;
+	if (!cmdDone) {
+		noOpCommand((uint32_t)((trb - cmdRing.phys) / sizeof(struct TRB)));
+	}
+	for (uint32_t i = cmdRing.enqueue & ~3U; i < cmdRing.enqueue; i++) {
+		noOpCommand(i);
+	}
+	IOLockUnlock(waitLock);
+	return done ? kIOReturnSuccess : kIOReturnAborted;
+}
+
+bool
+XHCIController::roomForCommandLocked(void)
+{
+	for (int pass = 0; pass < 2; pass++) {
+		IOLockLock(waitLock);
+		bool room = (cmdRing.enqueue + 1) % (RING_TRBS - 1) != cmdConsumer;
+		IOLockUnlock(waitLock);
+		if (room) {
+			return true;
+		}
+		if (pass == 0) {
+			workLoop->runAction(&XHCIController::gatedEvents, this);
+		}
+	}
+	uint32_t crcr = r32(op, OP_CRCR);
+	if ((crcr & CRCR_CRR) || (r32(op, OP_USBSTS) & USBSTS_HCH)) {
+		return false;
+	}
+	IOLockLock(waitLock);
+	bzero((void *)(uintptr_t)cmdRing.trbs, RING_TRBS * sizeof(struct TRB));
+	initRing(&cmdRing);
+	cmdConsumer = 0;
+	IOLockUnlock(waitLock);
+	__builtin_arm_dmb(0xf);
+	w64(op, OP_CRCR, cmdRing.phys | (crcr & CRCR_RSVD) | cmdRing.cycle);
+	return true;
+}
+
+void
+XHCIController::noOpCommand(uint32_t index)
+{
+	volatile struct TRB *t = &cmdRing.trbs[index];
+	t->param = 0;
+	t->status = 0;
+	__builtin_arm_dmb(0xf);
+	t->control = (t->control & TRB_CYCLE) | TRB_NOOP_CMD << TRB_TYPE_SHIFT;
+	__builtin_arm_dmb(0xf);
+}
+
+IOReturn
+XHCIController::stopEndpointLocked(uint32_t slot, uint32_t dci)
+{
+	struct Device *d = &devices[slot];
+	IOReturn ret = kIOReturnNotResponding;
+	for (int tries = 0; tries < 3; tries++) {
+		uint32_t state = endpointContext(d->outCtx, false, dci)[0] & 7;
+		if (state == EP_STATE_HALTED) {
+			ret = commandLocked(0, 0, TRB_RESET_EP << TRB_TYPE_SHIFT | slot << 24 | dci << 16, NULL);
+		} else if (state == EP_STATE_RUNNING) {
+			ret = commandLocked(0, 0, TRB_STOP_EP << TRB_TYPE_SHIFT | slot << 24 | dci << 16, NULL);
+		} else {
+			return kIOReturnSuccess;
+		}
+		if (ret == kIOReturnSuccess) {
+			return kIOReturnSuccess;
+		}
+	}
+	return ret;
 }
 
 void
@@ -386,10 +601,14 @@ XHCIController::interruptOccurred(IOInterruptEventSource *src, int count)
 
 		if (type == TRB_EV_COMMAND || type == TRB_EV_TRANSFER) {
 			struct InterruptPipe *pipe = NULL;
+			struct BulkQueue *queue = NULL;
 			if (type == TRB_EV_TRANSFER && slot <= MAX_SLOTS && dci < MAX_DCI && dci > 1) {
 				pipe = devices[slot].pipes[dci];
+				queue = devices[slot].queues[dci];
 			}
-			if (pipe != NULL) {
+			if (queue != NULL) {
+				queueEvent(slot, queue, e->param, code, e->status & 0xffffff);
+			} else if (pipe != NULL && pipe->action != NULL) {
 				uint32_t residual = e->status & 0xffffff;
 				if ((code == CC_SUCCESS || code == CC_SHORT_PACKET) && residual <= pipe->length) {
 					pipe->action(pipe->target, pipe->buffer, pipe->length - residual);
@@ -400,14 +619,27 @@ XHCIController::interruptOccurred(IOInterruptEventSource *src, int count)
 				IOLockLock(waitLock);
 				bool match;
 				if (type == TRB_EV_COMMAND) {
-					match = waitOnDCI == 0 && e->param == waitTRB;
+					uint64_t off = e->param - cmdRing.phys;
+					if (code != CC_RING_STOPPED && off < (RING_TRBS - 1) * sizeof(struct TRB)) {
+						cmdConsumer = (uint32_t)(off / sizeof(struct TRB) + 1) % (RING_TRBS - 1);
+					}
+					if (code != CC_RING_STOPPED && e->param == cmdTRB) {
+						cmdDone = true;
+						cmdCode = code;
+						cmdSlot = slot;
+					}
+					match = waitOnDCI == 0 && (waitTRB == WAIT_RING_STOPPED ? code == CC_RING_STOPPED :
+					    code != CC_RING_STOPPED && e->param == waitTRB);
 				} else {
-					match = waitOnDCI != 0 && slot == waitOnSlot && dci == waitOnDCI &&
-					    (e->param == waitTRB || (code != CC_SUCCESS && code != CC_SHORT_PACKET));
+					bool waiter = waitOnDCI != 0 && slot == waitOnSlot && dci == waitOnDCI;
+					if (waiter && waitData != 0 && e->param == waitData &&
+					    (code == CC_SUCCESS || code == CC_SHORT_PACKET)) {
+						waitDataResidual = e->status & 0xffffff;
+					}
+					match = waiter && (e->param == waitTRB || (code != CC_SUCCESS && code != CC_SHORT_PACKET));
 				}
 				if (waitTRB != 0 && match) {
 					waitCode = code;
-					waitSlot = slot;
 					waitResidual = e->status & 0xffffff;
 					waitDone = true;
 					IOLockWakeup(waitLock, &waitDone, true);
@@ -431,6 +663,17 @@ XHCIController::interruptOccurred(IOInterruptEventSource *src, int count)
 	}
 }
 
+IOReturn
+XHCIController::gatedEvents(OSObject *owner, void *arg0, void *arg1, void *arg2, void *arg3)
+{
+	(void)arg0;
+	(void)arg1;
+	(void)arg2;
+	(void)arg3;
+	((XHCIController *)owner)->interruptOccurred(NULL, 0);
+	return kIOReturnSuccess;
+}
+
 #pragma mark Transfers
 
 IOReturn
@@ -445,9 +688,6 @@ XHCIController::controlTransfer(uint32_t slot, uint8_t bmRequestType, uint8_t bR
 	}
 	struct Device *d = &devices[slot];
 	bool in = (bmRequestType & 0x80) != 0;
-	if (!in && wLength > 0) {
-		bcopy(data, d->ep0Buf, wLength);
-	}
 	uint64_t setup = (uint64_t)bmRequestType | (uint64_t)bRequest << 8 | (uint64_t)wValue << 16 |
 	    (uint64_t)wIndex << 32 | (uint64_t)wLength << 48;
 	uint32_t trt = wLength == 0 ? 0 : (in ? 3U : 2U);
@@ -457,19 +697,38 @@ XHCIController::controlTransfer(uint32_t slot, uint8_t bmRequestType, uint8_t bR
 		IOLockUnlock(cmdLock);
 		return kIOReturnNoDevice;
 	}
+	if (!in && wLength > 0) {
+		bcopy(data, d->ep0Buf, wLength);
+	}
 	IOLockLock(waitLock);
 	ringPut(&d->ep0, setup, 8, TRB_SETUP << TRB_TYPE_SHIFT | TRB_IDT | trt << 16);
+	uint64_t dataTRB = 0;
 	if (wLength > 0) {
-		ringPut(&d->ep0, d->ep0BufPhys, wLength, TRB_DATA << TRB_TYPE_SHIFT | (in ? TRB_DIR_IN : 0));
+		dataTRB = ringPut(&d->ep0, d->ep0BufPhys, wLength,
+		    TRB_DATA << TRB_TYPE_SHIFT | (in ? TRB_DIR_IN | TRB_ISP : 0));
 	}
 	uint64_t status = ringPut(&d->ep0, 0, 0,
 	    TRB_STATUS << TRB_TYPE_SHIFT | TRB_IOC | ((in && wLength > 0) ? 0 : TRB_DIR_IN));
-	expect(status, slot, 1);
+	expect(status, slot, 1, dataTRB);
 	IOLockUnlock(waitLock);
 	w32(db, 4 * slot, 1);
 
 	uint32_t code = 0, residual = 0;
-	IOReturn ret = waitFor(CMD_TIMEOUT_MS, &code, &residual);
+	IOReturn ret = waitFor(CMD_TIMEOUT_MS, &code, NULL, &residual);
+	uint32_t moved = residual <= wLength ? wLength - residual : 0;
+	if (current(slot, generation) && (ret != kIOReturnSuccess || code == CC_STALL ||
+	    (endpointContext(d->outCtx, false, 1)[0] & 7) == EP_STATE_HALTED)) {
+		uint64_t deq = d->ep0.phys + d->ep0.enqueue * sizeof(struct TRB);
+		if (stopEndpointLocked(slot, 1) != kIOReturnSuccess ||
+		    commandLocked(deq | d->ep0.cycle, 0, TRB_SET_TR_DEQUEUE << TRB_TYPE_SHIFT | slot << 24 | 1U << 16,
+		    NULL) != kIOReturnSuccess) {
+			d->broken = true;
+			IOLog("XHCI: slot %u: ep0 did not stop; the device takes no more requests\n", slot);
+		}
+	} else if (ret == kIOReturnSuccess && (code == CC_SUCCESS || code == CC_SHORT_PACKET) && in && wLength > 0) {
+		bcopy(d->ep0Buf, data, moved);
+		bzero((uint8_t *)data + moved, wLength - moved);
+	}
 	IOLockUnlock(cmdLock);
 	if (ret != kIOReturnSuccess) {
 		return ret;
@@ -478,19 +737,13 @@ XHCIController::controlTransfer(uint32_t slot, uint8_t bmRequestType, uint8_t bR
 		return kIOReturnNoDevice;
 	}
 	if (code == CC_STALL) {
-		command(0, 0, TRB_RESET_EP << TRB_TYPE_SHIFT | slot << 24 | 1U << 16, NULL);
-		uint64_t deq = d->ep0.phys + d->ep0.enqueue * sizeof(struct TRB);
-		command(deq | d->ep0.cycle, 0, TRB_SET_TR_DEQUEUE << TRB_TYPE_SHIFT | slot << 24 | 1U << 16, NULL);
 		return kIOReturnNotResponding;
 	}
 	if (code != CC_SUCCESS && code != CC_SHORT_PACKET) {
 		return kIOReturnError;
 	}
-	if (in && wLength > 0) {
-		bcopy(d->ep0Buf, data, wLength);
-	}
 	if (actual != NULL) {
-		*actual = wLength;
+		*actual = moved;
 	}
 	return kIOReturnSuccess;
 }
@@ -515,7 +768,7 @@ XHCIController::startInterruptIn(uint32_t slot, const struct PIEUSBEndpoint *ep,
 	if (!current(slot, generation)) {
 		return kIOReturnNoDevice;
 	}
-	if (!(ep->address & 0x80)) {
+	if (!(ep->address & 0x80) || (ep->address & 0xf) == 0) {
 		return kIOReturnBadArgument;
 	}
 	struct Device *d = &devices[slot];
@@ -526,7 +779,11 @@ XHCIController::startInterruptIn(uint32_t slot, const struct PIEUSBEndpoint *ep,
 	struct InterruptPipe *pipe = IOMallocType(struct InterruptPipe);
 	pipe->ring.trbs = (volatile struct TRB *)allocDMA(RING_TRBS * sizeof(struct TRB), 4096, &pipe->ring.phys);
 	pipe->length = ep->maxPacket & 0x7ff;
-	pipe->buffer = (uint8_t *)allocDMA(INTERRUPT_BUFFER(pipe), 64, &pipe->bufferPhys);
+	size_t align = 64;
+	while (align < INTERRUPT_BUFFER(pipe)) {
+		align <<= 1;
+	}
+	pipe->buffer = (uint8_t *)allocDMA(INTERRUPT_BUFFER(pipe), align, &pipe->bufferPhys);
 	if (pipe->ring.trbs == NULL || pipe->buffer == NULL || pipe->length == 0) {
 		freePipe(pipe);
 		return kIOReturnNoMemory;
@@ -535,20 +792,47 @@ XHCIController::startInterruptIn(uint32_t slot, const struct PIEUSBEndpoint *ep,
 	pipe->target = target;
 	pipe->action = action;
 
-	IOReturn ret = addEndpoint(slot, dci, EP_INTERRUPT_IN, ep, pipe->ring.phys | 1,
-	    interrupt_interval(d->speed, ep->interval), pipe->length, false);
-	if (ret != kIOReturnSuccess) {
-		freePipe(pipe);
-		return ret;
+	IOReturn ret;
+	IOLockLock(cmdLock);
+	if (!current(slot, generation)) {
+		ret = kIOReturnNoDevice;
+	} else if (d->pipes[dci] != NULL) {
+		ret = kIOReturnBadArgument;
+	} else {
+		ret = addEndpointLocked(slot, dci, EP_INTERRUPT_IN, ep, pipe->ring.phys | 1,
+		    interrupt_interval(d->speed, ep->interval), pipe->length, false);
+		if (ret == kIOReturnTimeout) {
+			pipe->action = NULL;
+		}
+		if (ret == kIOReturnSuccess || ret == kIOReturnTimeout) {
+			workLoop->runAction(&XHCIController::gatedPipeStart, this, pipe, (void *)(uintptr_t)slot,
+			    (void *)(uintptr_t)dci);
+		}
 	}
-	d->pipes[dci] = pipe;
-	ringPut(&pipe->ring, pipe->bufferPhys, pipe->length, TRB_NORMAL << TRB_TYPE_SHIFT | TRB_IOC | TRB_ISP);
-	w32(db, 4 * slot, dci);
+	IOLockUnlock(cmdLock);
+	if (ret != kIOReturnSuccess && ret != kIOReturnTimeout) {
+		freePipe(pipe);
+	}
+	return ret;
+}
+
+IOReturn
+XHCIController::gatedPipeStart(OSObject *owner, void *pipeArg, void *slotArg, void *dciArg, void *arg3)
+{
+	(void)arg3;
+	XHCIController *self = (XHCIController *)owner;
+	struct InterruptPipe *pipe = (struct InterruptPipe *)pipeArg;
+	uint32_t slot = (uint32_t)(uintptr_t)slotArg, dci = (uint32_t)(uintptr_t)dciArg;
+	self->devices[slot].pipes[dci] = pipe;
+	if (pipe->action != NULL) {
+		self->ringPut(&pipe->ring, pipe->bufferPhys, pipe->length, TRB_NORMAL << TRB_TYPE_SHIFT | TRB_IOC | TRB_ISP);
+		self->w32(self->db, 4 * slot, dci);
+	}
 	return kIOReturnSuccess;
 }
 
 IOReturn
-XHCIController::addEndpoint(uint32_t slot, uint32_t dci, uint32_t type, const struct PIEUSBEndpoint *ep,
+XHCIController::addEndpointLocked(uint32_t slot, uint32_t dci, uint32_t type, const struct PIEUSBEndpoint *ep,
     uint64_t dequeue, uint32_t interval, uint32_t avgTRB, bool replace)
 {
 	struct Device *d = &devices[slot];
@@ -571,7 +855,7 @@ XHCIController::addEndpoint(uint32_t slot, uint32_t dci, uint32_t type, const st
 	epc[2] = (uint32_t)dequeue;
 	epc[3] = (uint32_t)(dequeue >> 32);
 	epc[4] = avgTRB | (type == EP_INTERRUPT_IN ? avgTRB << 16 : 0);
-	return command(d->inPhys, 0, TRB_CONFIGURE_EP << TRB_TYPE_SHIFT | slot << 24, NULL);
+	return commandLocked(d->inPhys, 0, TRB_CONFIGURE_EP << TRB_TYPE_SHIFT | slot << 24, NULL);
 }
 
 IOReturn
@@ -590,32 +874,42 @@ XHCIController::bulkTransfer(uint32_t slot, const struct PIEUSBEndpoint *ep, voi
 	if (dci < 2 || dci >= MAX_DCI) {
 		return kIOReturnBadArgument;
 	}
+	IOLockLock(cmdLock);
+	if (!current(slot, generation)) {
+		IOLockUnlock(cmdLock);
+		return kIOReturnNoDevice;
+	}
+	if (d->queues[dci] != NULL || kept_queue(d, dci)) {
+		IOLockUnlock(cmdLock);
+		return kIOReturnBusy;
+	}
 	if (d->bulk[dci] == NULL) {
 		struct BulkPipe *pipe = IOMallocType(struct BulkPipe);
 		pipe->ring.trbs = (volatile struct TRB *)allocDMA(RING_TRBS * sizeof(struct TRB), 4096, &pipe->ring.phys);
 		pipe->buffer = (uint8_t *)allocDMA(BULK_MAX, BULK_MAX, &pipe->bufferPhys);
 		if (pipe->ring.trbs == NULL || pipe->buffer == NULL) {
+			IOLockUnlock(cmdLock);
 			freeBulk(pipe);
 			return kIOReturnNoMemory;
 		}
 		pipe->ep = *ep;
 		initRing(&pipe->ring);
-		IOReturn ret = addEndpoint(slot, dci, in ? EP_BULK_IN : EP_BULK_OUT, ep, pipe->ring.phys | 1, 0, 3072, false);
-		if (ret != kIOReturnSuccess) {
+		IOReturn ret = addEndpointLocked(slot, dci, in ? EP_BULK_IN : EP_BULK_OUT, ep, pipe->ring.phys | 1, 0,
+		    3072, false);
+		if (ret != kIOReturnSuccess && ret != kIOReturnTimeout) {
+			IOLockUnlock(cmdLock);
 			freeBulk(pipe);
 			return ret;
 		}
 		d->bulk[dci] = pipe;
+		if (ret != kIOReturnSuccess) {
+			IOLockUnlock(cmdLock);
+			return ret;
+		}
 	}
 	struct BulkPipe *pipe = d->bulk[dci];
 	if (!in && length > 0) {
 		bcopy(data, pipe->buffer, length);
-	}
-
-	IOLockLock(cmdLock);
-	if (!current(slot, generation)) {
-		IOLockUnlock(cmdLock);
-		return kIOReturnNoDevice;
 	}
 	IOLockLock(waitLock);
 	expect(ringPut(&pipe->ring, pipe->bufferPhys, length,
@@ -624,6 +918,10 @@ XHCIController::bulkTransfer(uint32_t slot, const struct PIEUSBEndpoint *ep, voi
 	w32(db, 4 * slot, dci);
 	uint32_t code = 0, residual = 0;
 	IOReturn ret = waitFor(BULK_TIMEOUT_MS, &code, &residual);
+	uint32_t moved = residual <= length ? length - residual : 0;
+	if (ret == kIOReturnSuccess && (code == CC_SUCCESS || code == CC_SHORT_PACKET) && in && moved > 0) {
+		bcopy(pipe->buffer, data, moved);
+	}
 	IOLockUnlock(cmdLock);
 	if (ret != kIOReturnSuccess) {
 		resetPipe(slot, ep->address, generation);
@@ -639,10 +937,6 @@ XHCIController::bulkTransfer(uint32_t slot, const struct PIEUSBEndpoint *ep, voi
 		IOLog("XHCI: slot %u endpoint 0x%x: completion code %u\n", slot, ep->address, code);
 		resetPipe(slot, ep->address, generation);
 		return kIOReturnIOError;
-	}
-	uint32_t moved = residual <= length ? length - residual : 0;
-	if (in && moved > 0) {
-		bcopy(pipe->buffer, data, moved);
 	}
 	if (actual != NULL) {
 		*actual = moved;
@@ -660,20 +954,29 @@ XHCIController::resetPipe(uint32_t slot, uint8_t endpointAddress, uint32_t gener
 	if (dci < 2 || dci >= MAX_DCI) {
 		return kIOReturnBadArgument;
 	}
+	IOLockLock(cmdLock);
+	if (!current(slot, generation)) {
+		IOLockUnlock(cmdLock);
+		return kIOReturnNoDevice;
+	}
 	struct Device *d = &devices[slot];
 	struct BulkPipe *pipe = d->bulk[dci];
-	if (pipe == NULL) {
-		return kIOReturnSuccess;
+	IOReturn ret = kIOReturnSuccess;
+	if (pipe != NULL) {
+		ret = stopEndpointLocked(slot, dci);
+		if (ret == kIOReturnSuccess) {
+			uint64_t deq = pipe->ring.phys + pipe->ring.enqueue * sizeof(struct TRB);
+			ret = addEndpointLocked(slot, dci, (endpointAddress & 0x80) ? EP_BULK_IN : EP_BULK_OUT, &pipe->ep,
+			    deq | pipe->ring.cycle, 0, 3072, true);
+		}
+		if (ret != kIOReturnSuccess) {
+			d->broken = true;
+			IOLog("XHCI: slot %u endpoint 0x%x did not reset; the device takes no more requests\n", slot,
+			    endpointAddress);
+		}
 	}
-	uint32_t state = endpointContext(d->outCtx, false, dci)[0] & 7;
-	if (state == EP_STATE_HALTED) {
-		command(0, 0, TRB_RESET_EP << TRB_TYPE_SHIFT | slot << 24 | dci << 16, NULL);
-	} else if (state == EP_STATE_RUNNING) {
-		command(0, 0, TRB_STOP_EP << TRB_TYPE_SHIFT | slot << 24 | dci << 16, NULL);
-	}
-	uint64_t deq = pipe->ring.phys + pipe->ring.enqueue * sizeof(struct TRB);
-	return addEndpoint(slot, dci, (endpointAddress & 0x80) ? EP_BULK_IN : EP_BULK_OUT, &pipe->ep,
-	           deq | pipe->ring.cycle, 0, 3072, true);
+	IOLockUnlock(cmdLock);
+	return ret;
 }
 
 void
@@ -692,7 +995,312 @@ XHCIController::freeBulk(struct BulkPipe *pipe)
 	IOFreeType(pipe, struct BulkPipe);
 }
 
+#pragma mark Bulk queues
+
+void
+XHCIController::freeQueue(struct BulkQueue *s)
+{
+	freeDMA((void *)(uintptr_t)s->ring.trbs, s->ring.phys, RING_TRBS * sizeof(struct TRB));
+	OSSafeReleaseNULL(s->map);
+	OSSafeReleaseNULL(s->mem);
+	IOFreeType(s, struct BulkQueue);
+}
+
+IOReturn
+XHCIController::gatedQueueKeep(OSObject *owner, void *queue, void *slotArg, void *arg2, void *arg3)
+{
+	(void)arg2;
+	(void)arg3;
+	XHCIController *self = (XHCIController *)owner;
+	struct Device *d = &self->devices[(uint32_t)(uintptr_t)slotArg];
+	struct BulkQueue *s = (struct BulkQueue *)queue;
+	s->next = d->dead;
+	d->dead = s;
+	return kIOReturnSuccess;
+}
+
+void
+XHCIController::queueIn(struct BulkQueue *s, uint32_t b)
+{
+	uint64_t trb = ringPut(&s->ring, s->buffersPhys + (uint64_t)b * s->size, s->size,
+	    TRB_NORMAL << TRB_TYPE_SHIFT | TRB_IOC | TRB_ISP);
+	s->owner[(trb - s->ring.phys) / sizeof(struct TRB)] = (uint8_t)b;
+}
+
+void
+XHCIController::queueEvent(uint32_t slot, struct BulkQueue *s, uint64_t trb, uint32_t code, uint32_t residual)
+{
+	uint64_t off = trb - s->ring.phys;
+	if (off >= (RING_TRBS - 1) * sizeof(struct TRB) || (off % sizeof(struct TRB)) != 0) {
+		return;
+	}
+	uint32_t index = (uint32_t)(off / sizeof(struct TRB));
+	uint8_t owner = s->owner[index];
+	if (owner == QUEUE_NONE) {
+		return;
+	}
+	s->owner[index] = QUEUE_NONE;
+	uint32_t b = owner & (QUEUE_BUFFERS_MAX - 1);
+	bool ok = (code == CC_SUCCESS || code == CC_SHORT_PACKET) && residual <= s->size;
+	IOReturn status = ok ? kIOReturnSuccess : code == CC_STALL ? kIOReturnNotResponding : kIOReturnIOError;
+	if (!ok && !s->halted) {
+		s->halted = true;
+		IOLog("XHCI: slot %u endpoint 0x%x: bulk queue halted, completion code %u\n", slot, s->ep.address, code);
+	}
+	if (s->in) {
+		if (ok) {
+			s->action(s->target, s->buffers + (size_t)b * s->size, s->size - residual, kIOReturnSuccess);
+			if (!s->halted) {
+				queueIn(s, b);
+				w32(db, 4 * slot, s->dci);
+			}
+		} else {
+			s->action(s->target, NULL, 0, status);
+		}
+		return;
+	}
+	if ((owner & QUEUE_NO_EVENT) && ok) {
+		return;
+	}
+	if (!(s->busy & (1U << b))) {
+		return;
+	}
+	s->busy &= ~(1U << b);
+	s->action(s->target, NULL, ok ? s->lengths[b] : 0, status);
+}
+
+IOReturn
+XHCIController::gatedQueueStart(OSObject *owner, void *queue, void *slotArg, void *arg2, void *arg3)
+{
+	(void)arg2;
+	(void)arg3;
+	XHCIController *self = (XHCIController *)owner;
+	struct BulkQueue *s = (struct BulkQueue *)queue;
+	uint32_t slot = (uint32_t)(uintptr_t)slotArg;
+	struct Device *d = &self->devices[slot];
+	d->queues[s->dci] = s;
+	if (s->in) {
+		for (uint32_t b = 0; b < s->count; b++) {
+			self->queueIn(s, b);
+		}
+		self->w32(self->db, 4 * slot, s->dci);
+	}
+	return kIOReturnSuccess;
+}
+
+IOReturn
+XHCIController::startQueue(uint32_t slot, const struct PIEUSBEndpoint *ep, uint32_t size, uint32_t count,
+    OSObject *target, PIEUSBQueueAction action, uint32_t generation)
+{
+	if (!current(slot, generation)) {
+		return kIOReturnNoDevice;
+	}
+	if (action == NULL || count < 1 || count > QUEUE_BUFFERS_MAX || size < 512 || size > 65536 ||
+	    (size & (size - 1)) != 0 || (uint64_t)size * count > QUEUE_BYTES_MAX || (ep->attributes & 3) != 2 ||
+	    (ep->maxPacket & 0x7ff) == 0) {
+		return kIOReturnBadArgument;
+	}
+	bool in = (ep->address & 0x80) != 0;
+	if (in && size % (ep->maxPacket & 0x7ffU) != 0) {
+		return kIOReturnBadArgument;
+	}
+	uint32_t dci = (ep->address & 0xf) * 2U + (in ? 1 : 0);
+	if (dci < 2 || dci >= MAX_DCI) {
+		return kIOReturnBadArgument;
+	}
+	struct Device *d = &devices[slot];
+	if (d->queues[dci] != NULL || d->bulk[dci] != NULL) {
+		return kIOReturnBusy;
+	}
+
+	struct BulkQueue *s = IOMallocType(struct BulkQueue);
+	s->ring.trbs = (volatile struct TRB *)allocDMA(RING_TRBS * sizeof(struct TRB), 4096, &s->ring.phys);
+	s->mem = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+	    kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapWriteCombineCache, (size_t)size * count,
+	    0x7fff0000ULL);
+	if (s->mem != NULL) {
+		s->mem->performOperation(kIOMemoryIncoherentIOFlush, 0, (size_t)size * count);
+		s->map = s->mem->createMappingInTask(kernel_task, 0, kIOMapAnywhere | kIOMapWriteCombineCache);
+	}
+	uint64_t phys = s->mem != NULL ? s->mem->getPhysicalSegment(0, NULL, kIOMemoryMapperNone) : 0;
+	if (s->ring.trbs == NULL || s->map == NULL || !RPiDMAAddress(nub, phys, &s->buffersPhys)) {
+		freeQueue(s);
+		return kIOReturnNoMemory;
+	}
+	s->buffers = (uint8_t *)s->map->getVirtualAddress();
+	s->size = size;
+	s->count = count;
+	s->dci = dci;
+	s->in = in;
+	s->ep = *ep;
+	s->target = target;
+	s->action = action;
+	memset(s->owner, QUEUE_NONE, sizeof(s->owner));
+	initRing(&s->ring);
+
+	IOReturn ret;
+	IOLockLock(cmdLock);
+	if (!current(slot, generation)) {
+		ret = kIOReturnNoDevice;
+	} else if (d->queues[dci] != NULL || d->bulk[dci] != NULL || kept_queue(d, dci)) {
+		ret = kIOReturnBusy;
+	} else {
+		bool configured = (endpointContext(d->outCtx, false, dci)[0] & 7) != 0;
+		ret = addEndpointLocked(slot, dci, in ? EP_BULK_IN : EP_BULK_OUT, ep, s->ring.phys | 1, 0, 3072,
+		    configured);
+		if (ret == kIOReturnSuccess) {
+			workLoop->runAction(&XHCIController::gatedQueueStart, this, s, (void *)(uintptr_t)slot);
+		}
+	}
+	if (ret == kIOReturnTimeout) {
+		IOLog("XHCI: slot %u endpoint 0x%x: no answer to configuring a bulk queue; its memory is kept\n", slot,
+		    ep->address);
+		workLoop->runAction(&XHCIController::gatedQueueKeep, this, s, (void *)(uintptr_t)slot);
+	}
+	IOLockUnlock(cmdLock);
+	if (ret != kIOReturnSuccess && ret != kIOReturnTimeout) {
+		freeQueue(s);
+	}
+	return ret;
+}
+
+IOReturn
+XHCIController::gatedQueueTake(OSObject *owner, void *slotArg, void *dciArg, void *generationArg, void *out)
+{
+	XHCIController *self = (XHCIController *)owner;
+	uint32_t slot = (uint32_t)(uintptr_t)slotArg, dci = (uint32_t)(uintptr_t)dciArg;
+	if (slot == 0 || slot > MAX_SLOTS) {
+		return kIOReturnNoDevice;
+	}
+	struct Device *d = &self->devices[slot];
+	if (!d->used || d->generation != (uint32_t)(uintptr_t)generationArg) {
+		return kIOReturnNoDevice;
+	}
+	*(struct BulkQueue **)out = d->queues[dci];
+	d->queues[dci] = NULL;
+	return kIOReturnSuccess;
+}
+
+IOReturn
+XHCIController::stopQueue(uint32_t slot, uint8_t endpointAddress, uint32_t generation)
+{
+	uint32_t dci = (endpointAddress & 0xf) * 2U + ((endpointAddress & 0x80) ? 1 : 0);
+	if (dci < 2 || dci >= MAX_DCI) {
+		return current(slot, generation) ? kIOReturnBadArgument : kIOReturnNoDevice;
+	}
+	struct BulkQueue *s = NULL;
+	IOLockLock(cmdLock);
+	IOReturn ret = workLoop->runAction(&XHCIController::gatedQueueTake, this, (void *)(uintptr_t)slot,
+	    (void *)(uintptr_t)dci, (void *)(uintptr_t)generation, &s);
+	if (ret != kIOReturnSuccess || s == NULL) {
+		IOLockUnlock(cmdLock);
+		return ret != kIOReturnSuccess ? ret : current(slot, generation) ? kIOReturnNotFound : kIOReturnNoDevice;
+	}
+	ret = stopEndpointLocked(slot, dci);
+	bool stopped = ret == kIOReturnSuccess;
+	bool live = current(slot, generation);
+	if (!stopped) {
+		if (live) {
+			IOLog("XHCI: slot %u endpoint 0x%x: the bulk queue did not stop; it is freed when the device goes\n",
+			    slot, endpointAddress);
+		}
+		workLoop->runAction(&XHCIController::gatedQueueKeep, this, s, (void *)(uintptr_t)slot);
+	}
+	IOLockUnlock(cmdLock);
+	if (stopped) {
+		freeQueue(s);
+	}
+	return !live ? kIOReturnNoDevice : stopped ? kIOReturnSuccess : ret;
+}
+
+struct QueueOutArgs {
+	uint32_t slot, generation, dci;
+	const void *data;
+	uint32_t length;
+};
+
+IOReturn
+XHCIController::gatedQueueOut(OSObject *owner, void *args, void *arg1, void *arg2, void *arg3)
+{
+	(void)arg1;
+	(void)arg2;
+	(void)arg3;
+	XHCIController *self = (XHCIController *)owner;
+	struct QueueOutArgs *a = (struct QueueOutArgs *)args;
+	if (!self->current(a->slot, a->generation)) {
+		return kIOReturnNoDevice;
+	}
+	struct BulkQueue *s = self->devices[a->slot].queues[a->dci];
+	if (s == NULL || s->in) {
+		return kIOReturnNotFound;
+	}
+	if (s->halted) {
+		return kIOReturnNotResponding;
+	}
+	if (a->length > s->size) {
+		return kIOReturnBadArgument;
+	}
+	uint32_t all = s->count == 32 ? 0xffffffffU : (1U << s->count) - 1;
+	uint32_t idle = ~s->busy & all;
+	if (idle == 0) {
+		return kIOReturnNoResources;
+	}
+	uint32_t b = (uint32_t)__builtin_ctz(idle);
+	uint64_t buffer = s->buffersPhys + (uint64_t)b * s->size;
+	bcopy(a->data, s->buffers + (size_t)b * s->size, a->length);
+	uint32_t mps = s->ep.maxPacket & 0x7ff;
+	uint64_t trb;
+	if (a->length > 0 && a->length % mps == 0) {
+		trb = self->ringPut(&s->ring, buffer, a->length, TRB_NORMAL << TRB_TYPE_SHIFT);
+		s->owner[(trb - s->ring.phys) / sizeof(struct TRB)] = (uint8_t)(b | QUEUE_NO_EVENT);
+		trb = self->ringPut(&s->ring, buffer, 0, TRB_NORMAL << TRB_TYPE_SHIFT | TRB_IOC);
+	} else {
+		trb = self->ringPut(&s->ring, buffer, a->length, TRB_NORMAL << TRB_TYPE_SHIFT | TRB_IOC);
+	}
+	s->owner[(trb - s->ring.phys) / sizeof(struct TRB)] = (uint8_t)b;
+	s->lengths[b] = a->length;
+	s->busy |= 1U << b;
+	self->w32(self->db, 4 * a->slot, a->dci);
+	return kIOReturnSuccess;
+}
+
+IOReturn
+XHCIController::queueOut(uint32_t slot, uint8_t endpointAddress, const void *data, uint32_t length,
+    uint32_t generation)
+{
+	if (!current(slot, generation)) {
+		return kIOReturnNoDevice;
+	}
+	if (endpointAddress & 0x80) {
+		return kIOReturnBadArgument;
+	}
+	struct QueueOutArgs a = { slot, generation, (endpointAddress & 0xfU) * 2U, data, length };
+	if (a.dci < 2 || a.dci >= MAX_DCI) {
+		return kIOReturnBadArgument;
+	}
+	return workLoop->runAction(&XHCIController::gatedQueueOut, this, &a);
+}
+
 #pragma mark Enumeration
+
+IOReturn
+XHCIController::controlReadExact(uint32_t slot, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
+    uint16_t wIndex, uint16_t wLength, void *data)
+{
+	uint32_t got = 0;
+	IOReturn ret = controlTransfer(slot, bmRequestType, bRequest, wValue, wIndex, wLength, data, &got);
+	return ret == kIOReturnSuccess && got != wLength ? kIOReturnUnderrun : ret;
+}
+
+static uint32_t
+valid_descriptors(const uint8_t *cfg, uint32_t length)
+{
+	uint32_t off = 0;
+	while (off + 2 <= length && cfg[off] >= 2 && cfg[off] <= length - off) {
+		off += cfg[off];
+	}
+	return off;
+}
 
 void
 XHCIController::attachPort(uint32_t port)
@@ -745,17 +1353,15 @@ XHCIController::attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, ui
 		if ((speed == SPEED_LOW || speed == SPEED_FULL) && parent->speed == SPEED_HIGH) {
 			d->ttSlot = (uint8_t)parentSlot;
 			d->ttPort = parentPort;
-			d->ttMulti = parent->ttMulti;
 		} else {
 			d->ttSlot = parent->ttSlot;
 			d->ttPort = parent->ttPort;
-			d->ttMulti = parent->ttMulti;
 		}
 	}
-	d->outCtx = (uint8_t *)allocDMA(ctxSize * 32, 64, &d->outPhys);
-	d->inCtx = (uint8_t *)allocDMA(ctxSize * 33, 64, &d->inPhys);
+	d->outCtx = (uint8_t *)allocDMA(ctxSize * 32, ctxSize * 32, &d->outPhys);
+	d->inCtx = (uint8_t *)allocDMA(ctxSize * 33, 4096, &d->inPhys);
 	d->ep0.trbs = (volatile struct TRB *)allocDMA(RING_TRBS * sizeof(struct TRB), 4096, &d->ep0.phys);
-	d->ep0Buf = (uint8_t *)allocDMA(4096, 64, &d->ep0BufPhys);
+	d->ep0Buf = (uint8_t *)allocDMA(4096, 4096, &d->ep0BufPhys);
 	if (d->outCtx == NULL || d->inCtx == NULL || d->ep0.trbs == NULL || d->ep0Buf == NULL) {
 		IOLog("XHCI: out of DMA memory\n");
 		detachDevice(slot);
@@ -769,7 +1375,7 @@ XHCIController::attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, ui
 	uint32_t *icc = (uint32_t *)(void *)d->inCtx;
 	icc[1] = 1U << 0 | 1U << 1;
 	uint32_t *slotIn = slotContext(d->inCtx, true);
-	slotIn[0] = (route & 0xfffff) | (uint32_t)speed << 20 | (d->ttSlot && d->ttMulti ? 1U << 25 : 0) | 1U << 27;
+	slotIn[0] = (route & 0xfffff) | (uint32_t)speed << 20 | 1U << 27;
 	slotIn[1] = (uint32_t)rootPort << 16;
 	slotIn[2] = (uint32_t)d->ttSlot | (uint32_t)d->ttPort << 8;
 	uint32_t *ep0 = endpointContext(d->inCtx, true, 1);
@@ -783,12 +1389,15 @@ XHCIController::attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, ui
 	}
 
 	uint8_t dev[18];
-	if (controlTransfer(slot, 0x80, 6, 0x0100, 0, 8, dev, NULL) != kIOReturnSuccess) {
+	if (controlReadExact(slot, 0x80, 6, 0x0100, 0, 8, dev) != kIOReturnSuccess || dev[0] < 18 || dev[1] != 1) {
 		IOLog("XHCI: port %u route %x: no device descriptor\n", rootPort, route);
 		detachDevice(slot);
 		return 0;
 	}
-	uint16_t realMPS = speed == SPEED_SUPER ? (uint16_t)(1U << dev[7]) : dev[7];
+	uint16_t realMPS = dev[7];
+	if (speed == SPEED_SUPER) {
+		realMPS = dev[7] < 16 ? (uint16_t)(1U << dev[7]) : 0;
+	}
 	if (realMPS != mps0 && realMPS != 0) {
 		bzero(d->inCtx, ctxSize * 33);
 		icc[1] = 1U << 1;
@@ -797,21 +1406,35 @@ XHCIController::attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, ui
 		command(d->inPhys, 0, TRB_EVALUATE_CONTEXT << TRB_TYPE_SHIFT | slot << 24, NULL);
 	}
 	uint8_t cfgHead[9];
-	if (controlTransfer(slot, 0x80, 6, 0x0100, 0, 18, dev, NULL) != kIOReturnSuccess ||
-	    controlTransfer(slot, 0x80, 6, 0x0200, 0, 9, cfgHead, NULL) != kIOReturnSuccess) {
+	uint16_t total = 0;
+	if (controlReadExact(slot, 0x80, 6, 0x0100, 0, 18, dev) == kIOReturnSuccess && dev[0] >= 18 && dev[1] == 1 &&
+	    controlReadExact(slot, 0x80, 6, 0x0200, 0, 9, cfgHead) == kIOReturnSuccess && cfgHead[0] >= 9 &&
+	    cfgHead[1] == 2) {
+		total = OSReadLittleInt16(cfgHead, 2);
+	}
+	if (total > 4096) {
+		IOLog("XHCI: port %u route %x: configuration of %u bytes is longer than 4096\n", rootPort, route, total);
+		detachDevice(slot);
+		return 0;
+	}
+	if (total < 9) {
 		IOLog("XHCI: port %u route %x: descriptors unreadable\n", rootPort, route);
 		detachDevice(slot);
 		return 0;
 	}
-	uint16_t total = OSReadLittleInt16(cfgHead, 2);
-	uint8_t *cfg = total >= 9 && total <= 4096 ? (uint8_t *)IOMallocData(total) : NULL;
+	uint8_t *cfg = (uint8_t *)IOMallocZeroData(total);
 	if (cfg == NULL) {
 		detachDevice(slot);
 		return 0;
 	}
+	uint32_t length = 0;
+	if (controlReadExact(slot, 0x80, 6, 0x0200, 0, total, cfg) == kIOReturnSuccess && cfg[0] >= 9 && cfg[1] == 2) {
+		length = valid_descriptors(cfg, total);
+	}
 	bool ok = false;
-	if (controlTransfer(slot, 0x80, 6, 0x0200, 0, total, cfg, NULL) == kIOReturnSuccess &&
-	    controlTransfer(slot, 0x00, 9, cfg[5], 0, 0, NULL, NULL) == kIOReturnSuccess) {
+	if (length < 9) {
+		IOLog("XHCI: port %u route %x: configuration unreadable\n", rootPort, route);
+	} else if (controlTransfer(slot, 0x00, 9, cfg[5], 0, 0, NULL, NULL) == kIOReturnSuccess) {
 		static const char *const speeds[] = { "?", "full", "low", "high", "super" };
 		char where[32];
 		if (route != 0) {
@@ -824,9 +1447,9 @@ XHCIController::attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, ui
 		    speeds[speed <= 4 ? speed : 0], slot);
 		ok = true;
 		if (dev[4] == 9) {
-			setupHub(slot, dev, cfg, total);
+			setupHub(slot, cfg, length);
 		}
-		publishInterfaces(slot, dev, cfg, total);
+		publishInterfaces(slot, dev, cfg, length);
 	}
 	IOFreeData(cfg, total);
 	if (!ok) {
@@ -836,17 +1459,42 @@ XHCIController::attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, ui
 }
 
 static IOReturn
-take_pipes(OSObject *owner, void *device, void *out, void *arg2, void *arg3)
+take_pipes(OSObject *owner, void *device, void *out, void *queuesOut, void *deadOut)
 {
 	(void)owner;
-	(void)arg2;
-	(void)arg3;
 	struct Device *d = (struct Device *)device;
 	struct InterruptPipe **pipes = (struct InterruptPipe **)out;
+	struct BulkQueue **queues = (struct BulkQueue **)queuesOut;
 	for (uint32_t dci = 0; dci < MAX_DCI; dci++) {
 		pipes[dci] = d->pipes[dci];
 		d->pipes[dci] = NULL;
+		queues[dci] = d->queues[dci];
+		d->queues[dci] = NULL;
 	}
+	*(struct BulkQueue **)deadOut = d->dead;
+	d->dead = NULL;
+	return kIOReturnSuccess;
+}
+
+static IOReturn
+keep_pipes(OSObject *owner, void *device, void *in, void *queuesIn, void *deadIn)
+{
+	(void)owner;
+	struct Device *d = (struct Device *)device;
+	struct InterruptPipe **pipes = (struct InterruptPipe **)in;
+	struct BulkQueue **queues = (struct BulkQueue **)queuesIn;
+	struct BulkQueue *dead = (struct BulkQueue *)deadIn;
+	for (uint32_t dci = 0; dci < MAX_DCI; dci++) {
+		if (pipes[dci] != NULL) {
+			pipes[dci]->action = NULL;
+			d->pipes[dci] = pipes[dci];
+		}
+		if (queues[dci] != NULL) {
+			queues[dci]->next = dead;
+			dead = queues[dci];
+		}
+	}
+	d->dead = dead;
 	return kIOReturnSuccess;
 }
 
@@ -857,6 +1505,7 @@ XHCIController::detachDevice(uint32_t slot)
 		return;
 	}
 	struct Device *d = &devices[slot];
+	bool again = d->gone;
 	if (d->isHub) {
 		for (uint8_t p = 1; p <= d->hubPorts; p++) {
 			uint8_t child = d->hubChild[p];
@@ -876,11 +1525,45 @@ XHCIController::detachDevice(uint32_t slot)
 		IOLockWakeup(waitLock, &waitDone, true);
 	}
 	IOLockUnlock(waitLock);
-	command(0, 0, TRB_DISABLE_SLOT << TRB_TYPE_SHIFT | slot << 24, NULL);
-	dcbaa[slot] = 0;
-
 	struct InterruptPipe *pipes[MAX_DCI];
-	workLoop->runAction(&take_pipes, this, d, pipes);
+	struct BulkQueue *queues[MAX_DCI];
+	struct BulkQueue *dead = NULL;
+	IOLockLock(cmdLock);
+	workLoop->runAction(&take_pipes, this, d, pipes, queues, &dead);
+	bool quiet = !d->timedOut;
+	for (uint32_t dci = 1; dci <= d->maxDCI && dci < MAX_DCI && d->outCtx != NULL; dci++) {
+		uint32_t state = endpointContext(d->outCtx, false, dci)[0] & 7;
+		if ((state == EP_STATE_RUNNING || state == EP_STATE_HALTED) &&
+		    stopEndpointLocked(slot, dci) != kIOReturnSuccess) {
+			quiet = false;
+		}
+	}
+	IOReturn ret = kIOReturnNotReady;
+	if (quiet) {
+		workLoop->runAction(&XHCIController::gatedEvents, this);
+		ret = commandLocked(0, 0, TRB_DISABLE_SLOT << TRB_TYPE_SHIFT | slot << 24, NULL);
+		if (ret == kIOReturnAborted) {
+			ret = commandLocked(0, 0, TRB_DISABLE_SLOT << TRB_TYPE_SHIFT | slot << 24, NULL);
+		}
+	}
+	bool disabled = ret == kIOReturnSuccess;
+	if (disabled) {
+		dcbaa[slot] = 0;
+	}
+	bool clean = disabled && !d->timedOut;
+	bool controllerDead = cmdDead;
+	IOLockUnlock(cmdLock);
+	if (!clean && !again) {
+		IOLog("XHCI: slot %u did not stop cleanly; its memory is kept %s\n", slot,
+		    controllerDead ? "because the controller takes no more commands" : "until it does");
+	} else if (clean && again) {
+		IOLog("XHCI: slot %u stopped; its memory is freed\n", slot);
+	}
+	while (clean && dead != NULL) {
+		struct BulkQueue *next = dead->next;
+		freeQueue(dead);
+		dead = next;
+	}
 
 	OSIterator *children = getChildIterator(gIOServicePlane);
 	OSArray *gone = OSArray::withCapacity(4);
@@ -900,21 +1583,31 @@ XHCIController::detachDevice(uint32_t slot)
 		gone->release();
 	}
 
-	for (uint32_t dci = 0; dci < MAX_DCI; dci++) {
+	for (uint32_t dci = 0; dci < MAX_DCI && clean; dci++) {
 		if (pipes[dci] != NULL) {
 			freePipe(pipes[dci]);
+		}
+		if (queues[dci] != NULL) {
+			freeQueue(queues[dci]);
 		}
 		if (d->bulk[dci] != NULL) {
 			freeBulk(d->bulk[dci]);
 			d->bulk[dci] = NULL;
 		}
 	}
-	freeDMA(d->outCtx, d->outPhys, ctxSize * 32);
-	freeDMA(d->inCtx, d->inPhys, ctxSize * 33);
-	freeDMA((void *)(uintptr_t)d->ep0.trbs, d->ep0.phys, RING_TRBS * sizeof(struct TRB));
-	freeDMA(d->ep0Buf, d->ep0BufPhys, 4096);
+	if (clean) {
+		freeDMA(d->outCtx, d->outPhys, ctxSize * 32);
+		freeDMA(d->inCtx, d->inPhys, ctxSize * 33);
+		freeDMA((void *)(uintptr_t)d->ep0.trbs, d->ep0.phys, RING_TRBS * sizeof(struct TRB));
+		freeDMA(d->ep0Buf, d->ep0BufPhys, 4096);
+	}
 	IOLockLock(cmdLock);
-	bzero(d, sizeof(*d));
+	if (clean || cmdDead) {
+		bzero(d, sizeof(*d));
+	} else {
+		workLoop->runAction(&keep_pipes, this, d, pipes, queues, dead);
+		d->isHub = false;
+	}
 	IOLockUnlock(cmdLock);
 }
 
@@ -948,21 +1641,21 @@ XHCIController::hubStatusChanged(OSObject *target, const uint8_t *data, uint32_t
 }
 
 void
-XHCIController::setupHub(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, uint32_t cfgLength)
+XHCIController::setupHub(uint32_t slot, const uint8_t *cfg, uint32_t cfgLength)
 {
 	struct Device *d = &devices[slot];
 	bool super = d->speed == SPEED_SUPER;
 	uint8_t desc[12];
 	uint16_t type = super ? SS_HUB_DESCRIPTOR : 0x29;
 	uint16_t length = super ? 12 : 9;
-	if (controlTransfer(slot, 0xa0, 6, (uint16_t)(type << 8), 0, length, desc, NULL) != kIOReturnSuccess) {
+	if (controlReadExact(slot, 0xa0, 6, (uint16_t)(type << 8), 0, length, desc) != kIOReturnSuccess ||
+	    desc[0] < length || desc[1] != type) {
 		IOLog("XHCI: slot %u: no hub descriptor\n", slot);
 		return;
 	}
 	uint8_t ports = desc[2] < HUB_PORTS ? desc[2] : HUB_PORTS;
 	uint16_t characteristics = OSReadLittleInt16(desc, 3);
 	uint32_t powerDelay = desc[5] * 2U;
-	d->ttMulti = !super && dev[6] == 2;
 	if (super && controlTransfer(slot, 0x20, SS_SET_HUB_DEPTH, d->depth, 0, 0, NULL, NULL) != kIOReturnSuccess) {
 		IOLog("XHCI: slot %u: USB 3 hub refused its depth\n", slot);
 		return;
@@ -970,7 +1663,7 @@ XHCIController::setupHub(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, 
 
 	for (uint32_t off = 0; off + 2 <= cfgLength && cfg[off] >= 2; off += cfg[off]) {
 		const uint8_t *e = cfg + off;
-		if (e[1] == 5 && e[0] >= 7 && (e[2] & 0x80) && (e[3] & 3) == 3) {
+		if (e[1] == 5 && e[0] >= 7 && (e[2] & 0x80) && (e[2] & 0xf) != 0 && (e[3] & 3) == 3) {
 			d->hubStatus.address = e[2];
 			d->hubStatus.attributes = e[3];
 			d->hubStatus.maxPacket = OSReadLittleInt16(e, 4);
@@ -987,9 +1680,9 @@ XHCIController::setupHub(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, 
 	for (int i = 0; i < 8; i++) {
 		slotIn[i] = slotOut[i];
 	}
-	slotIn[0] |= 1U << 26 | (d->ttMulti ? 1U << 25 : 0);
+	slotIn[0] |= 1U << 26;
 	slotIn[1] = (slotIn[1] & 0x00ffffffU) | (uint32_t)ports << 24;
-	if (!super) {
+	if (d->speed == SPEED_HIGH) {
 		slotIn[2] = (slotIn[2] & ~(3U << 16)) | ((characteristics >> 5) & 3U) << 16;
 	}
 	if (command(d->inPhys, 0, TRB_CONFIGURE_EP << TRB_TYPE_SHIFT | slot << 24, NULL) != kIOReturnSuccess) {
@@ -1001,8 +1694,7 @@ XHCIController::setupHub(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, 
 	IOSleep(powerDelay > 100 ? powerDelay : 100);
 	d->hubPorts = ports;
 	d->isHub = true;
-	IOLog("XHCI: slot %u: %shub, %u ports%s\n", slot, super ? "USB 3 " : "", ports,
-	    d->ttMulti ? ", multiple TTs" : "");
+	IOLog("XHCI: slot %u: %shub, %u ports\n", slot, super ? "USB 3 " : "", ports);
 	if (d->hubStatus.address != 0) {
 		startInterruptIn(slot, &d->hubStatus, this, &XHCIController::hubStatusChanged);
 	}
@@ -1015,7 +1707,7 @@ XHCIController::scanHub(uint32_t slot)
 	bool super = d->speed == SPEED_SUPER;
 	for (uint8_t p = 1; p <= d->hubPorts; p++) {
 		uint8_t st[4];
-		if (controlTransfer(slot, 0xa3, 0, 0, p, 4, st, NULL) != kIOReturnSuccess) {
+		if (controlReadExact(slot, 0xa3, 0, 0, p, 4, st) != kIOReturnSuccess) {
 			continue;
 		}
 		uint16_t status = OSReadLittleInt16(st, 0), change = OSReadLittleInt16(st, 2);
@@ -1050,7 +1742,7 @@ XHCIController::scanHub(uint32_t slot)
 		controlTransfer(slot, 0x23, 3, FEAT_PORT_RESET, p, 0, NULL, NULL);
 		for (int i = 0; i < 50; i++) {
 			IOSleep(10);
-			if (controlTransfer(slot, 0xa3, 0, 0, p, 4, st, NULL) == kIOReturnSuccess &&
+			if (controlReadExact(slot, 0xa3, 0, 0, p, 4, st) == kIOReturnSuccess &&
 			    (OSReadLittleInt16(st, 2) & HUB_C_PORT_RESET)) {
 				break;
 			}
@@ -1063,7 +1755,7 @@ XHCIController::scanHub(uint32_t slot)
 			controlTransfer(slot, 0x23, 1, FEAT_C_PORT_ENABLE, p, 0, NULL, NULL);
 		}
 		IOSleep(10);
-		if (controlTransfer(slot, 0xa3, 0, 0, p, 4, st, NULL) != kIOReturnSuccess ||
+		if (controlReadExact(slot, 0xa3, 0, 0, p, 4, st) != kIOReturnSuccess ||
 		    !(OSReadLittleInt16(st, 0) & HUB_PORT_ENABLE)) {
 			IOLog("XHCI: slot %u port %u: not enabled after reset\n", slot, p);
 			d->hubChild[p] = 0xff;
@@ -1119,7 +1811,7 @@ XHCIController::publishInterfaces(uint32_t slot, const uint8_t *dev, const uint8
 			intf->setLocation(loc);
 		} else if (desc[1] == 0x21 && desc[0] >= 9 && intf != NULL && desc[6] == 0x22) {
 			intf->setProperty("HIDReportDescriptorLength", OSReadLittleInt16(desc, 7), 32);
-		} else if (desc[1] == 5 && desc[0] >= 7 && intf != NULL &&
+		} else if (desc[1] == 5 && desc[0] >= 7 && (desc[2] & 0xf) != 0 && intf != NULL &&
 		    intf->numEndpoints < sizeof(intf->endpoints) / sizeof(intf->endpoints[0])) {
 			struct PIEUSBEndpoint *ep = &intf->endpoints[intf->numEndpoints++];
 			ep->address = desc[2];
@@ -1139,6 +1831,11 @@ XHCIController::publishInterfaces(uint32_t slot, const uint8_t *dev, const uint8
 void
 XHCIController::scanPorts(void)
 {
+	for (uint32_t slot = 1; slot <= MAX_SLOTS; slot++) {
+		if (devices[slot].used && devices[slot].gone) {
+			detachDevice(slot);
+		}
+	}
 	for (uint32_t port = 1; port <= maxPorts && port < 256; port++) {
 		uintptr_t sc = op + OP_PORTSC + 0x10 * (port - 1);
 		uint32_t portsc = r32(sc, 0);
@@ -1389,7 +2086,7 @@ PIEUSBInterface::bulkTransfer(uint8_t endpointAddress, void *data, uint32_t leng
 			return controller->bulkTransfer(slot, &endpoints[i], data, length, actual, generation);
 		}
 	}
-	return kIOReturnNotFound;
+	return controller->current(slot, generation) ? kIOReturnNotFound : kIOReturnNoDevice;
 }
 
 IOReturn
@@ -1408,5 +2105,29 @@ PIEUSBInterface::startInterruptIn(uint8_t endpointAddress, OSObject *target, PIE
 			return controller->startInterruptIn(slot, &endpoints[i], target, action, generation);
 		}
 	}
-	return kIOReturnNotFound;
+	return controller->current(slot, generation) ? kIOReturnNotFound : kIOReturnNoDevice;
+}
+
+IOReturn
+PIEUSBInterface::startBulkQueue(uint8_t endpointAddress, uint32_t size, uint32_t count, OSObject *target,
+    PIEUSBQueueAction action)
+{
+	for (unsigned i = 0; i < numEndpoints; i++) {
+		if (endpoints[i].address == endpointAddress && (endpoints[i].attributes & 3) == 2) {
+			return controller->startQueue(slot, &endpoints[i], size, count, target, action, generation);
+		}
+	}
+	return controller->current(slot, generation) ? kIOReturnNotFound : kIOReturnNoDevice;
+}
+
+IOReturn
+PIEUSBInterface::queueBulkOut(uint8_t endpointAddress, const void *data, uint32_t length)
+{
+	return controller->queueOut(slot, endpointAddress, data, length, generation);
+}
+
+IOReturn
+PIEUSBInterface::stopBulkQueue(uint8_t endpointAddress)
+{
+	return controller->stopQueue(slot, endpointAddress, generation);
 }

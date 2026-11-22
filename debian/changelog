@@ -19,6 +19,19 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
     kexts.conf lines tagged for it.
   * The early kexts for the Raspberry Pi's devices load on its kernels
     only.
+  * Kexts can drive USB devices through <pie/usb.h>. A bulk endpoint can
+    keep its transfers queued, as a network adapter needs.
+  * PIEUSBEthernet.kext drives USB Ethernet adapters with a Realtek
+    RTL8152, RTL8153 or RTL8153B.
+    It is not an early kext: list it in /etc/kexts.conf to load it.
+  * The xHCI driver refuses a USB device whose device or configuration
+    descriptor comes back short or with a bad header, and uses only the
+    whole descriptors of its configuration.
+  * The xHCI driver aligns its DMA buffers by bus address. A 64 KiB bulk
+    transfer could cross a 64 KiB boundary, and a USB storage device could
+    stop working after about 15 attaches.
+  * The xHCI driver runs a hub with multiple TTs in its single-TT default
+    setting, and says so to the controller.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
 

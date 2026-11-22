@@ -15,6 +15,7 @@ Source: https://github.com/blueberrypieos/xnu
  https://github.com/blueberrypieos/pieboot (tag 0.1.0, src/pieboot/)
  https://github.com/blueberrypieos/piecrypto (commit 6df3fe62c946fd0dbfa74fd105c854187cdcdab9, src/piecrypto/)
  https://github.com/freebsd/freebsd-src (commit 93c05b743ea865bb87653e9ee5fbaa837c00eee7, sys/dev/evdev, xnu-overlay/bsd/dev/evdev/)
+ https://github.com/openbsd/src (commit 7967a1390fb9b1423e4419297cf671477fb76f67, sys/dev/usb, kexts/USBEthernet/)
 Files-Excluded: .github/* kexts/* src/* xnu/*
 Files-Included:
  xnu/APPLE_LICENSE
@@ -3377,6 +3378,9 @@ Files-Included:
  kexts/Thermal/Info.plist
  kexts/Thermal/RPiThermal.cpp
  kexts/Thermal/RPiThermalPolicy.h
+ kexts/USBEthernet/Info.plist
+ kexts/USBEthernet/RTLUSBEthernet.cpp
+ kexts/USBEthernet/if_urereg.h
  kexts/Watchdog/Info.plist
  kexts/Watchdog/RPiWatchdog.cpp
 
@@ -7375,6 +7379,17 @@ Files: xnu-overlay/SETUP/kextsymboltool/deterministic.py
 Copyright: 2026 The Blueberry Pie OS Authors
 License: BSD-2-Clause
 
+Files: kexts/USBEthernet/RTLUSBEthernet.cpp
+Copyright: 2015-2016, 2019 Kevin Lo <kevlo@openbsd.org>
+ 2020 Jonathon Fletcher <jonathon.fletcher@gmail.com>
+ 2026 The Blueberry Pie OS Authors
+License: BSD-2-Clause
+
+Files: kexts/USBEthernet/if_urereg.h
+Copyright: 2015-2016, 2019 Kevin Lo <kevlo@openbsd.org>
+ 2026 The Blueberry Pie OS Authors
+License: BSD-2-Clause
+
 Files: debian/build/libs/libzfs_kext/include/zfs_config.h
  debian/build/libs/libzfs_kext/include/zfs_gitrev.h
 Copyright: 2008-2025 Brian Behlendorf
@@ -7782,6 +7797,7 @@ Files: debian/build/libs/cc_kext/arm64/profile_unsupported.o
  debian/build/kexts/Random/kextinfo.o
  debian/build/kexts/Serial/kextinfo.o
  debian/build/kexts/Thermal/kextinfo.o
+ debian/build/kexts/USBEthernet/kextinfo.o
  debian/build/kexts/Watchdog/kextinfo.o
 Copyright: 2026 The Blueberry Pie OS Authors
 License: BSD-2-Clause
