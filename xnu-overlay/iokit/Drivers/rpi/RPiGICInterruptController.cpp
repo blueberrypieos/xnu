@@ -12,7 +12,7 @@
 #include "RPiPlatform.h"
 
 extern "C" {
-#include <pexpert/arm64/gicv2.h>
+#include <pexpert/arm64/pie_gic.h>
 }
 
 #undef super
@@ -26,7 +26,7 @@ RPiGICInterruptController::start(IOService *provider)
 		return false;
 	}
 
-	numVectors = pe_gicv2_num_irqs();
+	numVectors = pe_gic_num_irqs();
 	if (numVectors == 0) {
 		IOLog("RPiGIC: GIC not initialized by the kernel\n");
 		return false;
@@ -71,7 +71,7 @@ RPiGICInterruptController::getInterruptHandlerAddress(void)
 IOReturn
 RPiGICInterruptController::handleInterrupt(void *  , IOService *  , int  )
 {
-	uint32_t irq = pe_gicv2_pending_irq();
+	uint32_t irq = pe_gic_pending_irq();
 
 	if (irq >= numVectors) {
 		return kIOReturnInvalid;
@@ -111,19 +111,19 @@ int
 RPiGICInterruptController::getVectorType(IOInterruptVectorNumber vectorNumber,
     IOInterruptVector *  )
 {
-	return pe_gicv2_is_edge((uint32_t)vectorNumber) ? kIOInterruptTypeEdge : kIOInterruptTypeLevel;
+	return pe_gic_is_edge((uint32_t)vectorNumber) ? kIOInterruptTypeEdge : kIOInterruptTypeLevel;
 }
 
 void
 RPiGICInterruptController::disableVectorHard(IOInterruptVectorNumber vectorNumber,
     IOInterruptVector *  )
 {
-	pe_gicv2_enable_irq((uint32_t)vectorNumber, false);
+	pe_gic_enable_irq((uint32_t)vectorNumber, false);
 }
 
 void
 RPiGICInterruptController::enableVector(IOInterruptVectorNumber vectorNumber,
     IOInterruptVector *  )
 {
-	pe_gicv2_enable_irq((uint32_t)vectorNumber, true);
+	pe_gic_enable_irq((uint32_t)vectorNumber, true);
 }

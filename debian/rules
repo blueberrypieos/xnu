@@ -11,11 +11,12 @@ KX   := $(W)/kexts
 BOOT := usr/lib/blueberry-pie-os/boot
 EXT  := System/Library/Extensions
 DEV  := usr/lib/blueberry-pie-os/kernel
-SOCS := bcm2711 bcm2712
+SOCS := bcm2711 bcm2712 rk3566
 T    := $(CURDIR)/debian/build/tree
 PATCHED := IONetworkingFamily IOSerialFamily msdosfs openzfs
 
 export PIE_SDKROOT        := $(KSDK)
+export KEXT_SOCS          := $(SOCS)
 export PIE_KERNEL_SOURCES := $(T)/src
 export PIE_KERNEL_BUILD   := $(W)/libs
 export PIE_XNU_SOURCE     := $(T)/xnu
@@ -32,8 +33,9 @@ PIEGPIO := -I$(CURDIR)/kexts/GPIO/include
 KEXT_OSO := -Wl,-oso_prefix,$(CURDIR)/
 KEXT_NOTICE := KEXT_LDFLAGS="-Wl,-sectcreate,__TEXT,__source,$(CURDIR)/debian/kext-source-notice.txt $(KEXT_OSO)"
 
-EARLY := PIEWatchdog PIERandom PIERTC PIEDMA piegpio msdosfs IONetworkingFamily \
-	PIEEthernet PIEThermal PIEBoard IOSerialFamily PIESerial PIECPUFreq
+PI_SOCS := bcm2711 bcm2712
+EARLY := PIEWatchdog PIERandom@pi PIERTC@pi PIEDMA@pi piegpio@pi msdosfs IONetworkingFamily \
+	PIEEthernet@pi PIEThermal@pi PIEBoard@pi IOSerialFamily PIESerial@pi PIECPUFreq@pi
 
 install:
 	rm -rf debian/build/tree
@@ -57,7 +59,8 @@ install:
 		SOC=$$(echo $$soc | tr a-z A-Z); \
 		PIE_REPRO_OBJROOT=$(KB)/$$soc/obj $(XNU_MAKE) KERNEL_CONFIGS=DEVELOPMENT MACHINE_CONFIGS=$$SOC BUILD_DSYM=0 \
 			INCFLAGS_EXTERN="-I$(T)/src/piecrypto/include -I$(T)/xnu/EXTERNAL_HEADERS" \
-			OBJROOT=$(KB)/$$soc/obj SYMROOT=$(KB)/$$soc/sym DSTROOT=$(KB)/$$soc/dst; \
+			OBJROOT=$(KB)/$$soc/obj SYMROOT=$(KB)/$$soc/sym DSTROOT=$(KB)/$$soc/dst \
+			KERNEL_BUILD_OBJROOT=/usr/src/pie/obj/DEVELOPMENT_ARM64_$$SOC; \
 	done
 	PIE_REPRO_SOURCE=$(T)/src KERNEL_BUILD=$(KB) KEXT_OBJ=$(KX)/IONetworkingFamily $(KEXT_NOTICE) $(K)/build-ionetworking-kext.sh
 	PIE_REPRO_SOURCE=$(T)/src KERNEL_BUILD=$(KB) KEXT_OBJ=$(KX)/msdosfs $(KEXT_NOTICE) $(K)/build-msdosfs-kext.sh
@@ -75,6 +78,7 @@ install:
 	$(call KEXT,PIEWatchdog,Watchdog,RPiWatchdog.cpp)
 	python3 $(CURDIR)/src/pieboot/mkbundle.py -o $(W)/xnu.bundle \
 		-k "bcm2712=$(patsubst $(CURDIR)/%,%,$(call KERNEL,bcm2712)):brcm,bcm2712:brcm,bcm2712d0+16k,lse,pan" \
+		-k "rk3566=$(patsubst $(CURDIR)/%,%,$(call KERNEL,rk3566)):rockchip,rk3566+16k,lse,pan" \
 		-k "bcm2711=$(patsubst $(CURDIR)/%,%,$(call KERNEL,bcm2711))"
 	install -D -m 644 $(W)/xnu.bundle $(ROOT)/$(BOOT)/xnu.bundle
 	set -e; for soc in $(SOCS); do \
@@ -82,9 +86,10 @@ install:
 		$(K)/mksystemkext.sh $(KB)/$$soc/obj/DEVELOPMENT_ARM64_$$SOC/config $(ROOT)/$(DEV)/$$soc; \
 	done
 	install -d $(ROOT)/$(EXT)
-	set -e; a=$$(debian/interface.sh $(NM) $(ROOT)/$(DEV)/bcm2711); b=$$(debian/interface.sh $(NM) $(ROOT)/$(DEV)/bcm2712); \
-	if [ "$$a" = "$$b" ]; then \
-		cp -R $(ROOT)/$(DEV)/bcm2711/System.kext $(ROOT)/$(EXT)/System.kext; \
+	set -e; first=$$(debian/interface.sh $(NM) $(ROOT)/$(DEV)/$(firstword $(SOCS))); same=1; \
+	for soc in $(SOCS); do i=$$(debian/interface.sh $(NM) $(ROOT)/$(DEV)/$$soc); [ "$$i" = "$$first" ] || same=0; done; \
+	if [ $$same = 1 ]; then \
+		cp -R $(ROOT)/$(DEV)/$(firstword $(SOCS))/System.kext $(ROOT)/$(EXT)/System.kext; \
 	else \
 		for soc in $(SOCS); do cp -R $(ROOT)/$(DEV)/$$soc/System.kext $(ROOT)/$(EXT)/System-$$soc.kext; done; \
 	fi
@@ -94,7 +99,9 @@ install:
 		cp -R $(KX)/$$k.kext $(ROOT)/$(EXT)/; \
 	done
 	install -d $(ROOT)/usr/lib/blueberry-pie-os
-	printf '%s.kext\n' $(EARLY) > $(ROOT)/usr/lib/blueberry-pie-os/kexts.early
+	set -e; for k in $(EARLY); do \
+		case $$k in *@pi) echo "$${k%@pi}.kext $(PI_SOCS)" ;; *) echo "$$k.kext" ;; esac; \
+	done > $(ROOT)/usr/lib/blueberry-pie-os/kexts.early
 	install -D -m 755 debian/blueberry-pie-os-kernel.postinst $(ROOT)/DEBIAN/postinst
 	set -e; for p in blueberry-pie-os-kernel blueberry-pie-os-kernel-dev; do \
 		install -D -m 644 debian/README.source $(ROOT)/usr/share/doc/$$p/README.source; \

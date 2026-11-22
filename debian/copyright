@@ -7352,7 +7352,9 @@ Files: xnu-overlay/SETUP/kextsymboltool/deterministic.py
  xnu-overlay/config/kernel-source-notice.txt
  debian/*
  xnu-overlay/iokit/Drivers/nvme/*
+ xnu-overlay/iokit/Drivers/rockchip/*
  xnu-overlay/iokit/Drivers/rpi/*
+ xnu-overlay/iokit/Drivers/sdmmc/*
  xnu-overlay/iokit/Drivers/usb/*
  xnu-overlay/iokit/pie/*
  xnu-overlay/libkern/amfi/amfi_builtin.c
@@ -7362,10 +7364,12 @@ Files: xnu-overlay/SETUP/kextsymboltool/deterministic.py
  xnu-overlay/osfmk/arm64/tunables/*
  xnu-overlay/osfmk/kern/pie_cpu.c
  xnu-overlay/pexpert/arm/pe_gicv2.c
+ xnu-overlay/pexpert/arm/pe_gicv3.c
  xnu-overlay/pexpert/pexpert/arm64/BCM2711.h
  xnu-overlay/pexpert/pexpert/arm64/BCM2712.h
+ xnu-overlay/pexpert/pexpert/arm64/RK3566.h
  xnu-overlay/pexpert/pexpert/arm64/cortex_arm64_common.h
- xnu-overlay/pexpert/pexpert/arm64/gicv2.h
+ xnu-overlay/pexpert/pexpert/arm64/pie_gic.h
  xnu-overlay/tools/filter_kernel_exports.py
  kexts/*
 Copyright: 2026 The Blueberry Pie OS Authors
@@ -7700,6 +7704,7 @@ Files: xnu/config/MASTER
  xnu/config/MASTER.arm64.MacOSX
  xnu-overlay/config/MASTER.arm64.bcm2711
  xnu-overlay/config/MASTER.arm64.bcm2712
+ xnu-overlay/config/MASTER.arm64.rk3566
 Copyright: 1986 Carnegie-Mellon University
  2001-2024 Apple Inc.
  2026 The Blueberry Pie OS Authors
@@ -7889,6 +7894,35 @@ Copyright: 2000-2021 Apple Inc.
  1987-1991 Carnegie Mellon University
  2026 The Blueberry Pie OS Authors
 License: LicenseRef-APSL-2.0-OS-reference AND CMU-Mach
+
+Files: patches/0010-rockchip-rk3566-support.patch
+Copyright: 1993-2026 Apple Inc.
+ 1990-2025 Apple Computer, Inc.
+ 1998 Apple Computer
+ 2021 Apple
+ 1991-1993, 1995, 1997 NeXT Computer, Inc.
+ 1987-1990, 1992, 1995 NeXT, Inc.
+ 1990 NeXT
+ 1994-1996 NeXT Software, Inc.
+ 2006 Sun Microsystems, Inc.
+ 2005-2006 SPARTA, Inc.
+ Daniel Boulet
+ 1987-1991 Carnegie Mellon University
+ 2026 The Blueberry Pie OS Authors
+License: LicenseRef-APSL-2.0-OS-reference AND APSL-2.0 AND CMU-Mach
+
+Files: patches/0011-pmap-kext-protect-table-flush.patch
+Copyright: 1993-2026 Apple Inc.
+ 1990-2025 Apple Computer, Inc.
+ 1991-1992, 1995, 1997 NeXT Computer, Inc.
+ 1987-1989, 1992, 1995 NeXT, Inc.
+ 1990 NeXT
+ 1994-1996 NeXT Software, Inc.
+ 2006 Sun Microsystems, Inc.
+ 2005-2006 SPARTA, Inc.
+ Daniel Boulet
+ 2026 The Blueberry Pie OS Authors
+License: LicenseRef-APSL-2.0-OS-reference
 
 License: Apache-2.0
                                   Apache License

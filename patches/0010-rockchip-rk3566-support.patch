@@ -1,0 +1,616 @@
+Description: Rockchip RK3566 support
+ The build lists, configuration and hooks for the RK3566 platform, whose
+ drivers are in xnu-overlay/. The interrupt controller hooks call a common
+ GIC interface with a GICv2 and a GICv3 implementation.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-18
+--- a/xnu/iokit/KernelConfigTables.cpp
++++ b/xnu/iokit/KernelConfigTables.cpp
+@@ -27,6 +27,7 @@
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
+ /* Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ /*
+  * NOTICE: This file was modified by SPARTA, Inc. in 2005 to introduce
+  * support for mandatory and extensible security protections.  This notice
+@@ -42,7 +43,7 @@
+     "   {"
+     "     'IOClass'         = RPiPlatformExpert;"
+     "     'IOProviderClass' = IOPlatformExpertDevice;"
+-    "     'IONameMatch'     = ('raspberrypi,4-model-b', 'raspberrypi,400', 'raspberrypi,4-compute-module', 'brcm,bcm2711', 'raspberrypi,5-model-b', 'raspberrypi,500', 'raspberrypi,5-compute-module', 'brcm,bcm2712', 'linux,dummy-virt');"
++    "     'IONameMatch'     = ('raspberrypi,4-model-b', 'raspberrypi,400', 'raspberrypi,4-compute-module', 'brcm,bcm2711', 'raspberrypi,5-model-b', 'raspberrypi,500', 'raspberrypi,5-compute-module', 'brcm,bcm2712', 'rockchip,rk3566', 'linux,dummy-virt');"
+     "     'IOProbeScore'    = 1000:32;"
+     "   },"
+     "   {"
+@@ -53,7 +54,7 @@
+     "   {"
+     "     'IOClass'         = RPiGICInterruptController;"
+     "     'IOProviderClass' = IOPlatformDevice;"
+-    "     'IONameMatch'     = ('arm,gic-400', 'arm,cortex-a15-gic', 'arm,cortex-a9-gic', 'arm,gic-v2');"
++    "     'IONameMatch'     = ('arm,gic-400', 'arm,cortex-a15-gic', 'arm,cortex-a9-gic', 'arm,gic-v2', 'arm,gic-v3');"
+     "   },"
+     "   {"
+     "     'IOClass'         = RPiL2InterruptController;"
+@@ -71,6 +72,11 @@
+     "     'IONameMatch'     = ('brcm,bcm2711-emmc2', 'brcm,bcm2835-sdhci', 'brcm,bcm2712-sdhci');"
+     "   },"
+     "   {"
++    "     'IOClass'         = RKDWMMC;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'rockchip,rk3568-dw-mshc';"
++    "   },"
++    "   {"
+     "     'IOClass'         = RPiPCIe;"
+     "     'IOProviderClass' = IOPlatformDevice;"
+     "     'IONameMatch'     = ('brcm,bcm2711-pcie', 'brcm,bcm2712-pcie');"
+--- a/xnu/iokit/conf/files.arm64
++++ b/xnu/iokit/conf/files.arm64
+@@ -1,4 +1,5 @@
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)).
+ # Portions Copyright (c) Apple Inc. All rights reserved.
+ #
+ # This file contains Original Code and/or Modifications of Original Code
+@@ -31,6 +32,8 @@
+ iokit/Drivers/rpi/RPiPSCIPMGR.cpp					optional config_rpi
+ iokit/Drivers/rpi/RPiWatchdogEarly.cpp				optional config_rpi
+ iokit/Drivers/rpi/RPiSDHCI.cpp					optional config_rpi
++iokit/Drivers/sdmmc/PIESDCard.cpp				optional config_rpi
++iokit/Drivers/rockchip/RKDWMMC.cpp				optional config_rpi
+ iokit/Drivers/rpi/RPiPCIe.cpp					optional config_rpi
+ iokit/Drivers/rpi/RPiMIP.cpp					optional config_rpi
+ iokit/Drivers/rpi/RP1.cpp					optional config_rpi
+--- a/xnu/makedefs/MakeInc.def
++++ b/xnu/makedefs/MakeInc.def
+@@ -7,6 +7,7 @@
+ #
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
+ # Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)).
+ # This file contains Original Code and/or Modifications of Original Code
+ # as defined in and that are subject to the Apple Public Source License
+ # Version 2.0 (the 'License'). You may not use this file except in
+@@ -45,7 +46,7 @@
+ else ifneq ($(findstring _host,$(RC_ProjectName)),)
+ SUPPORTED_ARM64_MACHINE_CONFIGS = NONE
+ else
+-SUPPORTED_ARM64_MACHINE_CONFIGS = T6000 T6020 T6030 T6031 T6041 T6050 T8101 T8103 T8112 T8122 T8132 T8142 VMAPPLE BCM2711 BCM2712
++SUPPORTED_ARM64_MACHINE_CONFIGS = T6000 T6020 T6030 T6031 T6041 T6050 T8101 T8103 T8112 T8122 T8132 T8142 VMAPPLE BCM2711 BCM2712 RK3566
+ 
+ SPTM_ENABLED_SOCS_MacOSX = t6000 t8112 t6020 t8122 t6030 t6031 t6041 t6050 t8132 t8142
+ EXCLAVES_ENABLED_SOCS_MacOSX = t8142 t6050
+@@ -111,6 +112,7 @@
+ MACHINE_FLAGS_ARM64_VMAPPLE = -DARM64_BOARD_CONFIG_VMAPPLE              -march=armv8.5a+sme2
+ MACHINE_FLAGS_ARM64_BCM2711 = -DARM64_BOARD_CONFIG_BCM2711              -mcpu=cortex-a72+nocrypto
+ MACHINE_FLAGS_ARM64_BCM2712 = -DARM64_BOARD_CONFIG_BCM2712              -mcpu=cortex-a76
++MACHINE_FLAGS_ARM64_RK3566 = -DARM64_BOARD_CONFIG_RK3566                -mcpu=cortex-a55
+ 
+ 
+ #
+@@ -378,7 +380,7 @@
+ 
+ ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG ?=
+ 
+-ifneq ($(filter BCM2711 BCM2712,$(CURRENT_MACHINE_CONFIG)),)
++ifneq ($(filter BCM2711 BCM2712 RK3566,$(CURRENT_MACHINE_CONFIG)),)
+ ARCH_STRING_FOR_CURRENT_MACHINE_CONFIG := arm64
+ endif
+ 
+@@ -1184,7 +1186,7 @@
+ 
+ LDFILES_KERNEL_ONLY = $(TARGET)/all-kpi.exp $(TARGET)/all-alias.exp $(TARGET)/symbolsets.plist
+ 
+-ifneq ($(filter BCM2711 BCM2712,$(CURRENT_MACHINE_CONFIG)),)
++ifneq ($(filter BCM2711 BCM2712 RK3566,$(CURRENT_MACHINE_CONFIG)),)
+ KERNEL_SOURCE_NOTICE = $(SRCROOT)/config/kernel-source-notice.txt
+ LDFLAGS_KERNEL_ONLY += -Wl,-sectcreate,__TEXT,__source,$(KERNEL_SOURCE_NOTICE)
+ LDFILES_KERNEL_ONLY += $(KERNEL_SOURCE_NOTICE)
+@@ -1213,12 +1215,12 @@
+ ifneq ($(wildcard $(SDKROOT)/usr/local/lib/kernel/libpiecrypto_kernel.a),)
+ LD_KERNEL_ARCHIVES += -lpiecrypto_kernel
+ endif
+-ifneq ($(filter BCM2711 BCM2712,$(CURRENT_MACHINE_CONFIG)),)
++ifneq ($(filter BCM2711 BCM2712 RK3566,$(CURRENT_MACHINE_CONFIG)),)
+ ifneq ($(wildcard $(SDKROOT)/usr/local/lib/kernel/libIOStorageFamily_kext.a),)
+ LD_KERNEL_ARCHIVES += -Wl,-force_load,$(SDKROOT)/usr/local/lib/kernel/libIOStorageFamily_kext.a
+ endif
+ endif
+-ifneq ($(filter BCM2711 BCM2712,$(CURRENT_MACHINE_CONFIG)),)
++ifneq ($(filter BCM2711 BCM2712 RK3566,$(CURRENT_MACHINE_CONFIG)),)
+ ifneq ($(wildcard $(SDKROOT)/usr/local/lib/kernel/libzfs_kext.a),)
+ LD_KERNEL_ARCHIVES += -Wl,-force_load,$(SDKROOT)/usr/local/lib/kernel/libzfs_kext.a
+ endif
+--- a/xnu/osfmk/arm64/machine_routines.c
++++ b/xnu/osfmk/arm64/machine_routines.c
+@@ -26,6 +26,7 @@
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ 
+ #include <arm64/machine_machdep.h>
+ #include <arm64/proc_reg.h>
+@@ -251,11 +252,11 @@
+ }
+ #endif
+ 
+-#if HAS_GIC_V2
+-#include <pexpert/arm64/gicv2.h>
++#if HAS_GIC_V2 || HAS_PIE_GIC_V3
++#include <pexpert/arm64/pie_gic.h>
+ #endif
+ 
+-#if !defined(HAS_IPI) && !HAS_GIC_V2
++#if !defined(HAS_IPI) && !HAS_GIC_V2 && !HAS_PIE_GIC_V3
+ __dead2
+ #endif
+ void
+@@ -263,8 +264,8 @@
+ {
+ #if defined(HAS_IPI)
+ 	ml_cpu_signal_type(cpu_mpidr, ARM64_REG_IPI_RR_TYPE_IMMEDIATE);
+-#elif HAS_GIC_V2
+-	pe_gicv2_send_ipi(cpu_mpidr);
++#elif HAS_GIC_V2 || HAS_PIE_GIC_V3
++	pe_gic_send_ipi(cpu_mpidr);
+ #else
+ 	panic("Platform does not support ACC Fast IPI");
+ #endif
+@@ -313,7 +314,7 @@
+ #endif
+ }
+ 
+-#if !defined(HAS_IPI) && !HAS_GIC_V2
++#if !defined(HAS_IPI) && !HAS_GIC_V2 && !HAS_PIE_GIC_V3
+ __dead2
+ #endif
+ void
+@@ -321,14 +322,14 @@
+ {
+ #if defined(HAS_IPI)
+ 	ml_cpu_signal_type(cpu_mpidr, ARM64_REG_IPI_RR_TYPE_DEFERRED);
+-#elif HAS_GIC_V2
+-	pe_gicv2_send_ipi(cpu_mpidr);
++#elif HAS_GIC_V2 || HAS_PIE_GIC_V3
++	pe_gic_send_ipi(cpu_mpidr);
+ #else
+ 	panic("Platform does not support ACC Fast IPI deferral");
+ #endif
+ }
+ 
+-#if !defined(HAS_IPI) && !HAS_GIC_V2
++#if !defined(HAS_IPI) && !HAS_GIC_V2 && !HAS_PIE_GIC_V3
+ __dead2
+ #endif
+ void
+@@ -336,7 +337,7 @@
+ {
+ #if defined(HAS_IPI)
+ 	ml_cpu_signal_type(cpu_mpidr, ARM64_REG_IPI_RR_TYPE_RETRACT);
+-#elif HAS_GIC_V2
++#elif HAS_GIC_V2 || HAS_PIE_GIC_V3
+ #else
+ 	panic("Platform does not support ACC Fast IPI retraction");
+ #endif
+--- a/xnu/osfmk/arm64/proc_reg.h
++++ b/xnu/osfmk/arm64/proc_reg.h
+@@ -26,6 +26,7 @@
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ /*
+  * @OSF_COPYRIGHT@
+  */
+@@ -262,6 +263,12 @@
+ 
+ #define MMU_I_CLINE 6
+ 
++#define MMU_CLINE   6
++
++#elif defined (CORTEX_A55)
++
++#define MMU_I_CLINE 6
++
+ #define MMU_CLINE   6
+ 
+ #else
+--- a/xnu/osfmk/arm64/sleh.c
++++ b/xnu/osfmk/arm64/sleh.c
+@@ -26,6 +26,7 @@
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ 
+ #include <arm/caches_internal.h>
+ #include <arm/cpu_data.h>
+@@ -3000,9 +3001,9 @@
+ 	__builtin_unreachable();
+ }
+ 
+-#if HAS_GIC_V2
++#if HAS_GIC_V2 || HAS_PIE_GIC_V3
+ #include <arm/machine_cpu.h>
+-#include <pexpert/arm64/gicv2.h>
++#include <pexpert/arm64/pie_gic.h>
+ #endif
+ 
+ void
+@@ -3014,28 +3015,28 @@
+ #endif
+ 
+ 
+-#if HAS_GIC_V2
+-	uint32_t iar = pe_gicv2_ack();
+-	uint32_t irq = iar & GICC_IAR_INTID_MASK;
+-	unsigned int type = pe_gicv2_is_ipi(irq) ? DBG_INTR_TYPE_IPI :
+-	    pe_gicv2_is_timer(irq) ? DBG_INTR_TYPE_TIMER : DBG_INTR_TYPE_OTHER;
++#if HAS_GIC_V2 || HAS_PIE_GIC_V3
++	uint32_t iar = pe_gic_ack();
++	uint32_t irq = iar & PIE_GIC_INTID_MASK;
++	unsigned int type = pe_gic_is_ipi(irq) ? DBG_INTR_TYPE_IPI :
++	    pe_gic_is_timer(irq) ? DBG_INTR_TYPE_TIMER : DBG_INTR_TYPE_OTHER;
+ 
+ 	sleh_interrupt_handler_prologue(state, type);
+ 
+-	if (irq >= GIC_SPURIOUS_IRQ_MIN) {
++	if (irq >= PIE_GIC_SPURIOUS_MIN) {
+ 	} else if (type == DBG_INTR_TYPE_IPI) {
+-		pe_gicv2_eoi(iar);
++		pe_gic_eoi(iar);
+ 		cpu_signal_handler();
+ 	} else if (type == DBG_INTR_TYPE_TIMER) {
+ 		cdp->cpu_decrementer = -1;
+ 		ml_interrupt_masked_debug_start(rtclock_intr, DBG_INTR_TYPE_TIMER);
+ 		rtclock_intr(TRUE);
+ 		ml_interrupt_masked_debug_end();
+-		pe_gicv2_eoi(iar);
++		pe_gic_eoi(iar);
+ 	} else {
+-		pe_gicv2_set_pending_irq(irq);
++		pe_gic_set_pending_irq(irq);
+ 		PE_handle_ext_interrupt();
+-		pe_gicv2_eoi(iar);
++		pe_gic_eoi(iar);
+ 	}
+ #elif USE_APPLEARMSMP
+ 	sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
+--- a/xnu/pexpert/arm/pe_fiq.c
++++ b/xnu/pexpert/arm/pe_fiq.c
+@@ -2,6 +2,7 @@
+  * Copyright (c) 2021 Apple Inc. All rights reserved.
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ /*
+  * This file contains Original Code and/or Modifications of Original Code
+  * as defined in and that are subject to the Apple Public Source License
+@@ -186,7 +187,7 @@
+ 	__builtin_arm_wsr64("ICC_IGRPEN0_EL1", 1);
+ 	__builtin_arm_isb(ISB_SY);
+ }
+-#elif !HAS_GIC_V2
++#elif !HAS_GIC_V2 && !HAS_PIE_GIC_V3
+ void
+ pe_init_fiq()
+ {
+--- a/xnu/pexpert/arm/pe_serial.c
++++ b/xnu/pexpert/arm/pe_serial.c
+@@ -14,6 +14,7 @@
+  * Please view doc/arm/arm_serial.md for an in-depth description of these drivers.
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ /*
+  * This file contains Original Code and/or Modifications of Original Code
+  * as defined in and that are subject to the Apple Public Source License
+@@ -42,6 +43,7 @@
+ #include <pexpert/device_tree.h>
+ #include <pexpert/arm/consistent_debug.h>
+ #include <pexpert/arm64/board_config.h>
++#include <libkern/OSByteOrder.h>
+ #include <arm64/proc_reg.h>
+ #include <pexpert/arm/protos.h>
+ #include <kern/sched_prim.h>
+@@ -750,6 +752,180 @@
+ 
+ /*****************************************************************************/
+ 
++#ifdef DW8250_UART
++
++#define DW8250_RBR              0
++#define DW8250_THR              0
++#define DW8250_LSR              5
++#define DW8250_LSR_DR           (1u << 0)
++#define DW8250_LSR_THRE         (1u << 5)
++
++static vm_offset_t dw8250_base;
++static uint32_t dw8250_shift;
++
++static unsigned int
++dw8250_uart_transmit_ready(void)
++{
++	return ml_io_read32(dw8250_base + (DW8250_LSR << dw8250_shift)) & DW8250_LSR_THRE;
++}
++
++static void
++dw8250_uart_transmit_data(uint8_t c)
++{
++	ml_io_write32(dw8250_base + (DW8250_THR << dw8250_shift), c);
++}
++
++static unsigned int
++dw8250_uart_receive_ready(void)
++{
++	return ml_io_read32(dw8250_base + (DW8250_LSR << dw8250_shift)) & DW8250_LSR_DR;
++}
++
++static uint8_t
++dw8250_uart_receive_data(void)
++{
++	return (uint8_t)ml_io_read32(dw8250_base + (DW8250_RBR << dw8250_shift));
++}
++
++static void
++dw8250_uart_init(void)
++{
++}
++
++SECURITY_READ_ONLY_LATE(static struct pe_serial_functions) dw8250_uart_serial_functions =
++{
++	.init = dw8250_uart_init,
++	.transmit_ready = dw8250_uart_transmit_ready,
++	.transmit_data = dw8250_uart_transmit_data,
++	.receive_ready = dw8250_uart_receive_ready,
++	.receive_data = dw8250_uart_receive_data,
++	.device = SERIAL_DW8250_UART
++};
++
++static void
++dw8250_uart_setup(const DeviceTreeNode *const devicetree_node)
++{
++	const struct {
++		uint64_t block_offset;
++		uint64_t block_size;
++	} *reg;
++	unsigned int reg_size;
++	if (SecureDTGetProperty(devicetree_node, "reg", (const void **)&reg, &reg_size) != kSuccess ||
++	    reg_size < sizeof(*reg)) {
++		panic("Unable to find the 'reg' property on the 8250 UART devicetree node");
++	}
++	const uint32_t *shift;
++	unsigned int shift_size;
++	if (SecureDTGetProperty(devicetree_node, "reg-shift", (const void **)&shift, &shift_size) == kSuccess &&
++	    shift_size == sizeof(*shift)) {
++		dw8250_shift = OSSwapBigToHostInt32(*shift);
++	}
++	const vm_offset_t soc_base_phys = pe_arm_get_soc_base_phys();
++	dw8250_base = ml_io_map(soc_base_phys + reg->block_offset, reg->block_size);
++	register_serial_functions(&dw8250_uart_serial_functions);
++}
++
++#endif /* DW8250_UART */
++
++/*****************************************************************************/
++
++#define RAMCONS_SIG             0x43474244u
++#define RAMCONS_HDR             12
++
++static vm_offset_t ramcons_base;
++static uint32_t ramcons_cap;
++static uint32_t ramcons_lock;
++
++static unsigned int
++ramcons_transmit_ready(void)
++{
++	return 1;
++}
++
++/*
++ * The console's writers, kprintf's and the console's own, do not share a
++ * lock: this one keeps the header in step, with interrupts off while it is
++ * held. A writer that cannot get it in a bounded time, as when a CPU
++ * stopped by a panic holds it, writes anyway.
++ */
++static void
++ramcons_transmit_data(uint8_t c)
++{
++	boolean_t istate = ml_set_interrupts_enabled(FALSE);
++	bool locked = false;
++	for (unsigned int i = 0; i < 100000 && !locked; i++) {
++		locked = os_atomic_cmpxchg(&ramcons_lock, 0, 1, acquire);
++	}
++	volatile uint32_t *hdr = (volatile uint32_t *)ramcons_base;
++	uint32_t start = hdr[1], size = hdr[2];
++	if (start >= ramcons_cap) {
++		start = 0;
++	}
++	*(volatile uint8_t *)(ramcons_base + RAMCONS_HDR + start) = c;
++	hdr[1] = start + 1 == ramcons_cap ? 0 : start + 1;
++	hdr[2] = size < ramcons_cap ? size + 1 : ramcons_cap;
++	if (locked) {
++		os_atomic_store(&ramcons_lock, 0, release);
++	}
++	ml_set_interrupts_enabled(istate);
++}
++
++static unsigned int
++ramcons_receive_ready(void)
++{
++	return 0;
++}
++
++static uint8_t
++ramcons_receive_data(void)
++{
++	return 0;
++}
++
++static void
++ramcons_init(void)
++{
++}
++
++SECURITY_READ_ONLY_LATE(static struct pe_serial_functions) ramcons_serial_functions =
++{
++	.init = ramcons_init,
++	.transmit_ready = ramcons_transmit_ready,
++	.transmit_data = ramcons_transmit_data,
++	.receive_ready = ramcons_receive_ready,
++	.receive_data = ramcons_receive_data,
++	.device = SERIAL_RAMCONS
++};
++
++/*
++ * The console also goes to the RAM console pieboot started, if any, which
++ * survives a warm reset for the next boot to read.
++ */
++static void
++ramcons_setup(void)
++{
++	DTEntry chosen;
++	const uint64_t *range;
++	unsigned int size;
++
++	if (SecureDTLookupEntry(NULL, "/chosen", &chosen) != kSuccess ||
++	    SecureDTGetProperty(chosen, "pieboot,ramcons", (const void **)&range, &size) != kSuccess ||
++	    size != 2 * sizeof(uint64_t) || range[1] <= RAMCONS_HDR || range[1] > 0x10000000) {
++		return;
++	}
++	ramcons_base = ml_io_map(range[0], range[1]);
++	ramcons_cap = (uint32_t)(range[1] - RAMCONS_HDR);
++	volatile uint32_t *hdr = (volatile uint32_t *)ramcons_base;
++	if (hdr[0] != RAMCONS_SIG || hdr[1] >= ramcons_cap || hdr[2] > ramcons_cap) {
++		hdr[0] = RAMCONS_SIG;
++		hdr[1] = 0;
++		hdr[2] = 0;
++	}
++	register_serial_functions(&ramcons_serial_functions);
++}
++
++/*****************************************************************************/
++
+ /**
+  * Output @str onto every registered serial interface by polling.
+  *
+@@ -826,6 +1002,9 @@
+ #ifdef PL011_UART
+ 	{ .compatible = "arm,pl011", .setup = pl011_uart_setup },
+ #endif // PL011_UART
++#ifdef DW8250_UART
++	{ .compatible = "snps,dw-apb-uart", .setup = dw8250_uart_setup },
++#endif // DW8250_UART
+ };
+ 
+ /**
+@@ -960,6 +1139,7 @@
+ 	if (!found_matching_driver) {
+ 		panic("Unable to find serial device driver for '%s'", compatible);
+ 	}
++	ramcons_setup();
+ 
+ 	fns = gPESF;
+ 	while (fns != NULL) {
+--- a/xnu/pexpert/conf/files.arm64
++++ b/xnu/pexpert/conf/files.arm64
+@@ -1,4 +1,5 @@
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)).
+ # Portions Copyright (c) Apple Inc. All rights reserved.
+ #
+ # This file contains Original Code and/or Modifications of Original Code
+@@ -19,6 +20,7 @@
+ pexpert/arm/pe_consistent_debug.c      standard
+ pexpert/arm/pe_fiq.c                   standard
+ pexpert/arm/pe_gicv2.c                 standard
++pexpert/arm/pe_gicv3.c                 standard
+ pexpert/arm/pe_identify_machine.c      standard
+ pexpert/arm/pe_init.c                  standard
+ pexpert/arm/pe_kprintf.c               standard
+--- a/xnu/pexpert/pexpert/arm/protos.h
++++ b/xnu/pexpert/pexpert/arm/protos.h
+@@ -1,6 +1,23 @@
+ /*
+  * Copyright (c) 2000-2021 Apple Inc. All rights reserved.
+  */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
++/*
++ * This file contains Original Code and/or Modifications of Original Code
++ * as defined in and that are subject to the Apple Public Source License
++ * Version 2.0 (the 'License'). You may not use this file except in
++ * compliance with the License. Please obtain a copy of the License at
++ * http://www.opensource.apple.com/apsl/ and read it before using this
++ * file.
++ *
++ * The Original Code and all software distributed under the License are
++ * distributed on an 'AS IS' basis, WITHOUT WARRANTY OF ANY KIND, EITHER
++ * EXPRESS OR IMPLIED, AND APPLE HEREBY DISCLAIMS ALL SUCH WARRANTIES,
++ * INCLUDING WITHOUT LIMITATION, ANY WARRANTIES OF MERCHANTABILITY,
++ * FITNESS FOR A PARTICULAR PURPOSE, QUIET ENJOYMENT OR NON-INFRINGEMENT.
++ * Please see the License for the specific language governing rights and
++ * limitations under the License.
++ */
+ #ifndef _PEXPERT_ARM_PROTOS_H
+ #define _PEXPERT_ARM_PROTOS_H
+ 
+@@ -47,7 +64,9 @@
+ 	SERIAL_APPLE_UART=0x1,
+ 	SERIAL_DOCKCHANNEL=0x2,
+ 	SERIAL_PL011_UART=0x4,
+-	SERIAL_DCC_UART=0x8
++	SERIAL_DCC_UART=0x8,
++	SERIAL_DW8250_UART=0x10,
++	SERIAL_RAMCONS=0x20
+ } serial_device_t;
+ 
+ kern_return_t serial_irq_enable(serial_device_t device);
+--- a/xnu/pexpert/pexpert/arm64/Makefile
++++ b/xnu/pexpert/pexpert/arm64/Makefile
+@@ -1,4 +1,5 @@
+ # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)).
+ # Portions Copyright (c) Apple Inc. All rights reserved.
+ #
+ # This file contains Original Code and/or Modifications of Original Code
+@@ -54,7 +55,8 @@
+ 	cortex_arm64_common.h \
+ 	BCM2711.h \
+ 	BCM2712.h \
+-	gicv2.h
++	RK3566.h \
++	pie_gic.h
+ 
+ 
+ # Headers installed into System.framework/PrivateHeaders (userspace internal SDK only).
+--- a/xnu/pexpert/pexpert/arm64/board_config.h
++++ b/xnu/pexpert/pexpert/arm64/board_config.h
+@@ -3,6 +3,7 @@
+  * Copyright (c) 2005-2006 Apple Computer, Inc. All rights reserved.
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ /*
+  * This file contains Original Code and/or Modifications of Original Code
+  * as defined in and that are subject to the Apple Public Source License
+@@ -352,6 +353,18 @@
+ 
+ #define MAX_L2_CLINE                   6
+ #define MAX_CPUS                       4
++#define MAX_CPU_CLUSTERS               1
++
++#define USE_APPLEARMSMP                1
++
++#define NO_XNU_PLATFORM_ERROR_HANDLER  1
++#endif
++
++#ifdef ARM64_BOARD_CONFIG_RK3566
++#include <pexpert/arm64/RK3566.h>
++
++#define MAX_L2_CLINE                   6
++#define MAX_CPUS                       4
+ #define MAX_CPU_CLUSTERS               1
+ 
+ #define USE_APPLEARMSMP                1

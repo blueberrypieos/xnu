@@ -35,6 +35,7 @@
 				<string>brcm,bcm2835-pm-wdt</string>
 				<string>brcm,bcm2711-pm</string>
 				<string>brcm,bcm2712-pm</string>
+				<string>snps,dw-wdt</string>
 			</array>
 			<key>IOMatchCategory</key>
 			<string>PIEWatchdog</string>

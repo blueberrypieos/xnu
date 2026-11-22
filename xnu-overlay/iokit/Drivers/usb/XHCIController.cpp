@@ -1208,6 +1208,10 @@ XHCIController::resetController(void)
 bool
 XHCIController::start(IOService *provider)
 {
+	if (IODTMatchNubWithKeys(provider, "'rockchip,rk3568-dwc3'")) {
+		IOLog("XHCI: the RK3566's DWC3 needs its PHY and clocks set up first; not started\n");
+		return false;
+	}
 	if (!super::start(provider)) {
 		return false;
 	}

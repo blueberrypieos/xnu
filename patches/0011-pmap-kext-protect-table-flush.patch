@@ -1,0 +1,33 @@
+Description: a kext's first executable segment flushes the whole TLB
+ pmap_kext_protect() clears the table entries' PXN bits above the first
+ kext text it makes executable. It flushed the TLB only for that text's
+ range. On the RK3566's Cortex-A55 the first kext's static constructors
+ then took an instruction fetch permission fault on about one boot in
+ eight. When it changes table entries, it now invalidates the whole TLB.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-18
+
+--- a/xnu/osfmk/arm/pmap/pmap.c
++++ b/xnu/osfmk/arm/pmap/pmap.c
+@@ -26,6 +26,7 @@
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
+ /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-18: a kext's first executable segment, whose table entries change, flushes the whole TLB (APSL 2.0 section 2.2(b)). */
+ #include <string.h>
+ #include <stdlib.h>
+ #include <mach_assert.h>
+@@ -4265,7 +4266,11 @@
+ 		}
+ 	}
+ 	FLUSH_PTE_STRONG();
+-	PMAP_UPDATE_TLBS(kernel_pmap, start, va, false, tables == 0);
++	if (tables) {
++		flush_mmu_tlb();
++	} else {
++		PMAP_UPDATE_TLBS(kernel_pmap, start, va, false, true);
++	}
+ 	pmap_unlock(kernel_pmap, PMAP_LOCK_EXCLUSIVE);
+ 
+ 	if (aliased) {

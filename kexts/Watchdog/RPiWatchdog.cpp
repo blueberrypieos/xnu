@@ -36,6 +36,14 @@
  * Pi, and disarms one the bootloader armed (the EEPROM's
  * BOOT_WATCHDOG_TIMEOUT).
  *
+ * The RK3566's watchdog (snps,dw-wdt) counts down a 24 MHz clock from
+ * 2^(16+TOP), TOP in TORR (0x04) bits 3:0: the shortest such period of at
+ * least the timeout is used, 2.8 s to 89 s. CR (0x00) bit 0 arms it, with
+ * bit 1 clear for a reset at the count's end, not an interrupt first; CRR
+ * (0x0c) 0x76 starts the count again; CCVR (0x08) is the count. Once armed
+ * it cannot be disarmed: hw.watchdog.enabled=0 and pie_watchdog=0 fail, and
+ * a halt leaves the longest period running.
+ *
  * User space checks in through IOWatchDogTimer: an administrator
  * sets the service's properties to a number of seconds N
  * (IORegistryEntrySetCFProperties with a CFNumber), and must set it again
@@ -52,14 +60,19 @@
  *
  * Registry property WatchdogState: armed, disarmed, qemu (not armed: QEMU),
  * expiring (hw.watchdog.test_expire). The hw.watchdog sysctls: enabled
- * (root: 1 arms, 0 disarms), timeout (root: 2-15 s), remaining (ms, -1 when
- * not armed), pets, user_timeout (s, 0 when off), user_remaining (ms, -1
- * when off), user_pid, and test_expire (root: 1 stops setting the count,
- * as a hung kernel would, with the hardware armed: the board resets
- * timeout seconds later; 0 goes back to setting it).
+ * (root: 1 arms, 0 disarms), timeout (root: 2-15 s, 2-89 s on a
+ * DesignWare watchdog; EBUSY while test_expire is set), remaining (ms,
+ * -1 when not armed), pets, user_timeout (s, 0 when off), user_remaining
+ * (ms, -1 when off), user_pid, and test_expire (root: 1 stops setting
+ * the count, as a hung kernel would, with the hardware armed: the board
+ * resets when the count set last runs out, at most one hardware period
+ * later; 0 goes back to setting it; it reads back as set). The hardware
+ * period is the timeout, or on a DesignWare watchdog the period chosen as
+ * above.
  */
 
 #include <IOKit/IOCommandGate.h>
+#include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IOMessage.h>
 #include <IOKit/IOService.h>
@@ -85,10 +98,15 @@ enum {
 	PM_REGS_SIZE = 0x28,
 	FW_GET_FIRMWARE_REVISION = 0x00000001,
 	FW_VIDEOCORE_SINCE = 1546300800,        /* 2019-01-01 UTC: older than any BCM2711 or BCM2712 firmware */
+	DW_CR = 0x00, DW_CR_EN = 0x1, DW_CR_RMOD = 0x2, DW_TORR = 0x04, DW_CCVR = 0x08, DW_CRR = 0x0c, DW_CRR_KICK = 0x76,
+	DW_REGS_SIZE = 0x10, DW_TOP_MAX = 15,
 };
+
+#define kDWClockHz      24000000ULL
 
 #define kMinTimeoutS    2               /* a pet a second: 1 s would run out between them */
 #define kMaxTimeoutS    15              /* PM_WDOG_TIME >> 16 */
+#define kDWMaxTimeoutS  89
 #define kPetMs          1000
 #define kMaxUserS       86400
 
@@ -107,6 +125,7 @@ public:
 	int setExpiring(bool on);
 	int remainingMs(void);
 	int userRemainingMs(void);
+	bool expiring(void) const { return fExpiring; }
 
 	uint32_t fTimeoutS, fUserS;
 	uint64_t fPets;
@@ -122,14 +141,30 @@ private:
 	IONotifier *fHaltNotifier;
 	uint64_t fUserDeadline;
 	char fUserName[32];
-	bool fQEMU, fExpiring, fSysctls;
+	bool fQEMU, fExpiring, fSysctls, fDW;
 	bool fOwnInstance, fGateAdded, fTimerAdded, fUserShutdown, fUserSet, fBootDue;
 	volatile bool fStopping;
 	thread_t volatile fInternal;
 
 	uint32_t rd(unsigned off) { return fRegs[off / 4]; }
 	void wr(unsigned off, uint32_t v) { fRegs[off / 4] = PM_PASSWORD | v; }
-	bool hardwareArmed(void) { return (rd(PM_RSTC) & PM_RSTC_WRCFG) == PM_RSTC_WRCFG_FULL_RESET; }
+	void dwWr(unsigned off, uint32_t v) { fRegs[off / 4] = v; }
+	bool
+	hardwareArmed(void)
+	{
+		return fDW ? (rd(DW_CR) & DW_CR_EN) != 0 : (rd(PM_RSTC) & PM_RSTC_WRCFG) == PM_RSTC_WRCFG_FULL_RESET;
+	}
+	uint32_t maxTimeoutS(void) const { return fDW ? kDWMaxTimeoutS : kMaxTimeoutS; }
+	uint32_t periodS(void) const { return fDW ? (uint32_t)((1ULL << (16 + dwTop(fTimeoutS))) / kDWClockHz) : fTimeoutS; }
+	static uint32_t
+	dwTop(uint32_t s)
+	{
+		uint32_t top = 0;
+		while (top < DW_TOP_MAX && (1ULL << (16 + top)) < s * kDWClockHz) {
+			top++;
+		}
+		return top;
+	}
 	void pet(void);
 	void arm(void);
 	void disarm(void);
@@ -152,7 +187,8 @@ bool
 RPiWatchdog::start(IOService *provider)
 {
 	fMap = provider->mapDeviceMemoryWithIndex(0, kIOMapInhibitCache);
-	if (fMap == NULL || fMap->getLength() < PM_REGS_SIZE) {
+	fDW = IODTMatchNubWithKeys(provider, "'snps,dw-wdt'");
+	if (fMap == NULL || fMap->getLength() < (fDW ? DW_REGS_SIZE : PM_REGS_SIZE)) {
 		IOLog("RPiWatchdog: cannot map its registers\n");
 		return false;
 	}
@@ -166,12 +202,12 @@ RPiWatchdog::start(IOService *provider)
 
 	OSNumber *timeout = OSDynamicCast(OSNumber, getProperty("WatchdogTimeout"));
 	fTimeoutS = timeout != NULL ? timeout->unsigned32BitValue() : kMaxTimeoutS;
-	fTimeoutS = fTimeoutS < kMinTimeoutS ? kMinTimeoutS : fTimeoutS > kMaxTimeoutS ? kMaxTimeoutS : fTimeoutS;
+	fTimeoutS = fTimeoutS < kMinTimeoutS ? kMinTimeoutS : fTimeoutS > maxTimeoutS() ? maxTimeoutS() : fTimeoutS;
 	uint32_t bootArg = 1;
 	PE_parse_boot_argn("pie_watchdog", &bootArg, sizeof(bootArg));
 	uint32_t revision = 0;
-	fQEMU = RPiFirmwareProperty(FW_GET_FIRMWARE_REVISION, &revision, sizeof(revision)) != kIOReturnSuccess ||
-	    revision < FW_VIDEOCORE_SINCE;
+	fQEMU = !fDW && (RPiFirmwareProperty(FW_GET_FIRMWARE_REVISION, &revision, sizeof(revision)) != kIOReturnSuccess ||
+	    revision < FW_VIDEOCORE_SINCE);
 
 	fWorkLoop = IOWorkLoop::workLoop();
 	fGate = fWorkLoop != NULL ? IOCommandGate::commandGate(this) : NULL;
@@ -208,8 +244,8 @@ RPiWatchdog::start(IOService *provider)
 	}
 
 	fGate->runActionBlock(^IOReturn {
-		uint32_t rstc = rd(PM_RSTC), wdog = rd(PM_WDOG);
-		if (fQEMU && (rstc & PM_RSTC_WRCFG) == PM_RSTC_WRCFG_FULL_RESET) {
+		uint32_t rstc = rd(fDW ? DW_CR : PM_RSTC), wdog = rd(fDW ? DW_TORR : PM_WDOG);
+		if (fQEMU && hardwareArmed()) {
 			IOLog("RPiWatchdog: firmware revision check failed (%u), but the watchdog is armed, so not QEMU's\n",
 			    revision);
 			fQEMU = false;
@@ -220,18 +256,21 @@ RPiWatchdog::start(IOService *provider)
 		} else if (bootArg == 0) {
 			IOLog("RPiWatchdog: pie_watchdog=0; not armed\n");
 			/* One the bootloader armed (BOOT_WATCHDOG_TIMEOUT) would reset the board unpetted. */
-			if ((rstc & PM_RSTC_WRCFG) == PM_RSTC_WRCFG_FULL_RESET) {
+			if (fDW && hardwareArmed()) {
+				IOLog("RPiWatchdog: pie_watchdog=0, but this watchdog cannot be disarmed once armed\n");
+				arm();
+			} else if (hardwareArmed()) {
 				disarm();
 				IOLog("RPiWatchdog: found armed (RSTC 0x%08x, WDOG 0x%08x); disarmed\n", rstc, wdog);
 			}
 		} else {
 			if (kernelHad) {
 				IOLog("RPiWatchdog: taken over from the kernel\n");
-			} else if ((rstc & PM_RSTC_WRCFG) == PM_RSTC_WRCFG_FULL_RESET) {
-				IOLog("RPiWatchdog: found armed (RSTC 0x%08x, WDOG 0x%08x)\n", rstc, wdog);
+			} else if (hardwareArmed()) {
+				IOLog("RPiWatchdog: found armed (0x%08x, 0x%08x)\n", rstc, wdog);
 			}
 			arm();
-			IOLog("RPiWatchdog: armed, %u s, set again every %u ms\n", fTimeoutS, kPetMs);
+			IOLog("RPiWatchdog: armed, %u s, set again every %u ms\n", periodS(), kPetMs);
 		}
 		if (bootDeadline != 0 && !fUserSet && !fUserShutdown && !fStopping) {
 			fUserS = bootS;
@@ -326,6 +365,14 @@ RPiWatchdog::free(void)
 void
 RPiWatchdog::pet(void)
 {
+	if (fDW) {
+		uint32_t top = dwTop(fTimeoutS);
+		dwWr(DW_TORR, (top << 4) | top);
+		dwWr(DW_CRR, DW_CRR_KICK);
+		dwWr(DW_CR, (rd(DW_CR) & ~DW_CR_RMOD) | DW_CR_EN);
+		fPets++;
+		return;
+	}
 	wr(PM_WDOG, (fTimeoutS << 16) & PM_WDOG_TIME);
 	wr(PM_RSTC, (rd(PM_RSTC) & ~(PM_PASSWORD_MASK | PM_RSTC_WRCFG)) | PM_RSTC_WRCFG_FULL_RESET);
 	fPets++;
@@ -342,6 +389,13 @@ RPiWatchdog::arm(void)
 void
 RPiWatchdog::disarm(void)
 {
+	if (fDW) {
+		dwWr(DW_TORR, (DW_TOP_MAX << 4) | DW_TOP_MAX);
+		dwWr(DW_CRR, DW_CRR_KICK);
+		fArmed = false;
+		fExpiring = false;
+		return;
+	}
 	wr(PM_RSTC, PM_RSTC_RESET);
 	fArmed = false;
 	fExpiring = false;
@@ -465,13 +519,18 @@ RPiWatchdog::haltRestart(void *target, void *, UInt32 messageType, IOService *, 
 int
 RPiWatchdog::setEnabled(bool on)
 {
+	if (!on && fDW && fArmed) {
+		return ENOTSUP;
+	}
 	fGate->runActionBlock(^IOReturn {
 		if (on && !fArmed) {
 			if (fQEMU) {
 				IOLog("RPiWatchdog: armed by hw.watchdog.enabled; QEMU's model resets at once\n");
 			}
 			arm();
-			IOLog("RPiWatchdog: armed, %u s\n", fTimeoutS);
+			IOLog("RPiWatchdog: armed, %u s\n", periodS());
+		} else if (!on && fArmed && fDW) {
+			IOLog("RPiWatchdog: this watchdog cannot be disarmed once armed\n");
 		} else if (!on && fArmed) {
 			disarm();
 			IOLog("RPiWatchdog: disarmed by hw.watchdog.enabled\n");
@@ -485,18 +544,21 @@ RPiWatchdog::setEnabled(bool on)
 int
 RPiWatchdog::setTimeout(int s)
 {
-	if (s < kMinTimeoutS || s > kMaxTimeoutS) {
+	if (s < kMinTimeoutS || (uint32_t)s > maxTimeoutS()) {
 		return EINVAL;
 	}
-	fGate->runActionBlock(^IOReturn {
+	IOReturn ret = fGate->runActionBlock(^IOReturn {
+		if (fExpiring) {
+			return kIOReturnBusy;
+		}
 		fTimeoutS = (uint32_t)s;
-		if (fArmed && !fExpiring) {
+		if (fArmed) {
 			pet();
 		}
 		updateState();
 		return kIOReturnSuccess;
 	});
-	return 0;
+	return ret == kIOReturnSuccess ? 0 : EBUSY;
 }
 
 int
@@ -508,7 +570,7 @@ RPiWatchdog::setExpiring(bool on)
 		}
 		if (on && !fExpiring) {
 			IOLog("RPiWatchdog: no longer set again (hw.watchdog.test_expire); the board resets in %u s\n",
-			    fTimeoutS);
+			    periodS());
 		} else if (!on && fExpiring) {
 			pet();
 		}
@@ -525,7 +587,8 @@ RPiWatchdog::remainingMs(void)
 	int ms = -1, *out = &ms;        /* by pointer: kxld has no block runtime for byref captures */
 	fGate->runActionBlock(^IOReturn {
 		if (fArmed && hardwareArmed()) {
-			*out = (int)(((uint64_t)(rd(PM_WDOG) & PM_WDOG_TIME) * 1000) >> 16);
+			*out = fDW ? (int)((uint64_t)rd(DW_CCVR) * 1000 / kDWClockHz) :
+			    (int)(((uint64_t)(rd(PM_WDOG) & PM_WDOG_TIME) * 1000) >> 16);
 		}
 		return kIOReturnSuccess;
 	});
@@ -569,6 +632,7 @@ sysctl_watchdog(struct sysctl_oid *oidp, void *, int which, struct sysctl_req *r
 	case WD_USER_TIMEOUT: v = (int)w->fUserS; break;
 	case WD_USER_REMAINING: v = w->userRemainingMs(); break;
 	case WD_USER_PID: v = w->fUserPid; break;
+	case WD_TEST_EXPIRE: v = w->expiring(); break;
 	default: v = 0; break;
 	}
 	int err = sysctl_handle_int(oidp, &v, 0, req);
@@ -589,7 +653,7 @@ sysctl_watchdog(struct sysctl_oid *oidp, void *, int which, struct sysctl_req *r
 
 SYSCTL_NODE(_hw, OID_AUTO, watchdog, CTLFLAG_RW | CTLFLAG_LOCKED, NULL, "hardware watchdog");
 WD_OID(enabled, CTLFLAG_RW, WD_ENABLED, "1: armed; 0: not");
-WD_OID(timeout, CTLFLAG_RW, WD_TIMEOUT, "seconds without the kernel before a reset, 2-15");
+WD_OID(timeout, CTLFLAG_RW, WD_TIMEOUT, "at least this many seconds from the last time the count was set to a reset, 2-15 (2-89 on a DesignWare watchdog); not while test_expire is set");
 WD_OID(remaining, CTLFLAG_RD, WD_REMAINING, "ms the count has left, -1 when not armed");
 WD_OID(pets, CTLFLAG_RD, WD_PETS, "times the count was set");
 WD_OID(user_timeout, CTLFLAG_RD, WD_USER_TIMEOUT, "seconds between user space's check-ins, 0: none due");

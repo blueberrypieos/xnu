@@ -3,6 +3,7 @@
  * Copyright (c) 2026 The Blueberry Pie OS Authors
  */
 
+#include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IOService.h>
 #include <os/atomic_private.h>
@@ -21,6 +22,9 @@ enum {
 	PM_RSTC = 0x1c, PM_RSTC_WRCFG = 0x30, PM_RSTC_WRCFG_FULL_RESET = 0x20, PM_RSTC_RESET = 0x102,
 	PM_WDOG = 0x24, PM_WDOG_TIME = 0xfffff,
 	PM_REGS_SIZE = 0x28,
+	DW_CR = 0x00, DW_CR_EN = 0x01, DW_CR_RMOD = 0x02, DW_TORR = 0x04, DW_CRR = 0x0c, DW_CRR_RESTART = 0x76,
+	DW_REGS_SIZE = 0x18,
+	DW_TOP = 13, DW_TOP_HALT = 15,
 	FW_GET_FIRMWARE_REVISION = 0x00000001,
 	FW_VIDEOCORE_SINCE = 1546300800,
 };
@@ -44,6 +48,7 @@ static unsigned sTries;
 static bool sStopped;
 static uint32_t sBootS;
 static uint64_t sBootDeadline;
+static bool sDW;
 
 static void
 wr(unsigned off, uint32_t v)
@@ -54,14 +59,43 @@ wr(unsigned off, uint32_t v)
 static bool
 hardwareArmed(void)
 {
+	if (sDW) {
+		return sRegs[DW_CR / 4] & DW_CR_EN;
+	}
 	return (sRegs[PM_RSTC / 4] & PM_RSTC_WRCFG) == PM_RSTC_WRCFG_FULL_RESET;
+}
+
+/*
+ * A DesignWare watchdog counts 2^(16 + TOP) cycles of its clock, 24 MHz on
+ * the RK3566: TOP 13 is 22 s. Its count's end resets the board at once,
+ * not after an interrupt and a second count.
+ */
+static void
+dwSet(uint32_t top)
+{
+	sRegs[DW_TORR / 4] = (top << 4) | top;
+	uint32_t cr = sRegs[DW_CR / 4];
+	if ((cr & (DW_CR_EN | DW_CR_RMOD)) != DW_CR_EN) {
+		sRegs[DW_CR / 4] = (cr & ~DW_CR_RMOD) | DW_CR_EN;
+	}
+	sRegs[DW_CRR / 4] = DW_CRR_RESTART;
 }
 
 static void
 setCount(void)
 {
+	if (sDW) {
+		dwSet(DW_TOP);
+		return;
+	}
 	wr(PM_WDOG, (kTimeoutS << 16) & PM_WDOG_TIME);
 	wr(PM_RSTC, (sRegs[PM_RSTC / 4] & ~(PM_PASSWORD_MASK | PM_RSTC_WRCFG)) | PM_RSTC_WRCFG_FULL_RESET);
+}
+
+static uint32_t
+periodS(void)
+{
+	return sDW ? (uint32_t)((1ULL << (16 + DW_TOP)) / 24000000ULL) : kTimeoutS;
 }
 
 static void
@@ -76,7 +110,7 @@ decide(void)
 {
 	if (sMap == NULL) {
 		sMap = sNub->mapDeviceMemoryWithIndex(0, kIOMapInhibitCache);
-		if (sMap == NULL || sMap->getLength() < PM_REGS_SIZE) {
+		if (sMap == NULL || sMap->getLength() < (sDW ? DW_REGS_SIZE : PM_REGS_SIZE)) {
 			OSSafeReleaseNULL(sMap);
 			if (++sTries < kFirmwareTries) {
 				return false;
@@ -89,6 +123,19 @@ decide(void)
 	/* One the boot loader armed, pieboot's fallback boot, must not run out while this waits. */
 	if (hardwareArmed()) {
 		setCount();
+	}
+	if (sDW) {
+		uint32_t bootArg = 1;
+		PE_parse_boot_argn("pie_watchdog", &bootArg, sizeof(bootArg));
+		if (bootArg == 0 && !hardwareArmed()) {
+			IOLog("RPiWatchdog: pie_watchdog=0; the kernel does not arm it\n");
+			return true;
+		}
+		if (bootArg == 0) {
+			IOLog("RPiWatchdog: pie_watchdog=0, but this watchdog cannot be disarmed once armed\n");
+		}
+		sMayArm = true;
+		return true;
 	}
 	uint32_t revision = 0;
 	IOReturn ret = RPiFirmwareProperty(FW_GET_FIRMWARE_REVISION, &revision, sizeof(revision));
@@ -140,7 +187,7 @@ tick(thread_call_param_t, thread_call_param_t)
 		if (sMayArm) {
 			setCount();
 			IOLog("RPiWatchdog: armed by the kernel, %u s, set again every %u ms until PIEWatchdog "
-			    "takes it\n", kTimeoutS, kPetMs);
+			    "takes it\n", periodS(), kPetMs);
 			setOwner(kOwnerKernel);
 		} else {
 			setOwner(kOwnerNone);
@@ -164,6 +211,7 @@ rpi_watchdog_early_start(IOService *nub)
 		return;
 	}
 	nub->retain();
+	sDW = IODTMatchNubWithKeys(nub, "'snps,dw-wdt'");
 	sLock = IOLockAlloc();
 	sCall = thread_call_allocate_with_priority(tick, NULL, THREAD_CALL_PRIORITY_KERNEL_HIGH);
 	if (sLock == NULL || sCall == NULL) {
@@ -212,7 +260,12 @@ rpi_watchdog_halt(void)
 	}
 	os_atomic_store(&sStopped, true, relaxed);
 	volatile uint32_t *regs = os_atomic_load(&sRegs, acquire);
-	if (regs != NULL) {
+	if (regs != NULL && sDW) {
+		/* It cannot be disarmed: the longest count, 89 s, for the board to power off first. */
+		if (hardwareArmed()) {
+			dwSet(DW_TOP_HALT);
+		}
+	} else if (regs != NULL) {
 		wr(PM_RSTC, PM_RSTC_RESET);
 	}
 	if (sLock != NULL) {
@@ -281,7 +334,7 @@ pie_watchdog_handback(bool armed)
 	setOwner(kernel ? kOwnerKernel : kOwnerNone);
 	if (kernel) {
 		setCount();
-		IOLog("RPiWatchdog: back with the kernel, %u s\n", kTimeoutS);
+		IOLog("RPiWatchdog: back with the kernel, %u s\n", periodS());
 	}
 	if (kernel || (sBootDeadline != 0 && !os_atomic_load(&sStopped, relaxed))) {
 		uint64_t deadline;

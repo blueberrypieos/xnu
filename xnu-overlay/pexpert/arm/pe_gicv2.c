@@ -14,7 +14,7 @@
 #include <machine/atomic.h>
 
 #if HAS_GIC_V2
-#include <pexpert/arm64/gicv2.h>
+#include <pexpert/arm64/pie_gic.h>
 
 #define GICD_CTLR               0x000
 #define GICD_TYPER              0x004
@@ -233,43 +233,43 @@ pe_init_fiq(void)
 }
 
 uint32_t
-pe_gicv2_ack(void)
+pe_gic_ack(void)
 {
 	return gicc_read(GICC_IAR);
 }
 
 void
-pe_gicv2_eoi(uint32_t iar)
+pe_gic_eoi(uint32_t iar)
 {
 	gicc_write(GICC_EOIR, iar);
 }
 
 bool
-pe_gicv2_is_ipi(uint32_t irq)
+pe_gic_is_ipi(uint32_t irq)
 {
 	return irq < 16;
 }
 
 bool
-pe_gicv2_is_timer(uint32_t irq)
+pe_gic_is_timer(uint32_t irq)
 {
 	return irq == GIC_PPI_VTIMER;
 }
 
 void
-pe_gicv2_set_pending_irq(uint32_t irq)
+pe_gic_set_pending_irq(uint32_t irq)
 {
 	gic_pending_irq[cpu_number()] = irq;
 }
 
 uint32_t
-pe_gicv2_pending_irq(void)
+pe_gic_pending_irq(void)
 {
 	return gic_pending_irq[cpu_number()];
 }
 
 void
-pe_gicv2_send_ipi(unsigned int cpu_mpidr)
+pe_gic_send_ipi(unsigned int cpu_mpidr)
 {
 	uint32_t phys_id = (cpu_mpidr & (MPIDR_AFF1_MASK | MPIDR_AFF0_MASK)) | GIC_CPU_IF_VALID;
 	uint32_t mask = 0;
@@ -288,13 +288,13 @@ pe_gicv2_send_ipi(unsigned int cpu_mpidr)
 }
 
 uint32_t
-pe_gicv2_num_irqs(void)
+pe_gic_num_irqs(void)
 {
 	return gic_nirqs;
 }
 
 void
-pe_gicv2_enable_irq(uint32_t irq, bool enable)
+pe_gic_enable_irq(uint32_t irq, bool enable)
 {
 	if (irq >= gic_nirqs) {
 		return;
@@ -305,7 +305,7 @@ pe_gicv2_enable_irq(uint32_t irq, bool enable)
 SIMPLE_LOCK_DECLARE(gic_cfg_lock, 0);
 
 void
-pe_gicv2_set_edge(uint32_t irq, bool edge)
+pe_gic_set_edge(uint32_t irq, bool edge)
 {
 	if (irq < 32 || irq >= gic_nirqs) {
 		return;
@@ -318,7 +318,7 @@ pe_gicv2_set_edge(uint32_t irq, bool edge)
 }
 
 bool
-pe_gicv2_is_edge(uint32_t irq)
+pe_gic_is_edge(uint32_t irq)
 {
 	if (irq >= gic_nirqs) {
 		return false;

@@ -10,7 +10,7 @@
 #include "RPiPlatform.h"
 
 extern "C" {
-#include <pexpert/arm64/gicv2.h>
+#include <pexpert/arm64/pie_gic.h>
 }
 
 enum {
@@ -140,7 +140,7 @@ RPiMIP::serializeProperties(OSSerialize *s) const
 			char text[80];
 			const char *who = owner[v] != NULL ? owner[v]->getCStringNoCopy() : ((inUse >> v) & 1) ? "msi" : "free";
 			snprintf(text, sizeof(text), "SPI %u: %s, %s", spiBase + v, who,
-			    pe_gicv2_is_edge(gicInterrupt(v)) ? "edge" : "level");
+			    pe_gic_is_edge(gicInterrupt(v)) ? "edge" : "level");
 			OSString *str = OSString::withCString(text);
 			if (str != NULL) {
 				vectors->setObject(str);
@@ -167,7 +167,7 @@ RPiMIP::allocate(unsigned n)
 	}
 	IOLockUnlock(lock);
 	for (unsigned i = 0; first >= 0 && i < n; i++) {
-		pe_gicv2_set_edge(gicInterrupt((unsigned)first + i), true);
+		pe_gic_set_edge(gicInterrupt((unsigned)first + i), true);
 	}
 	return first;
 }

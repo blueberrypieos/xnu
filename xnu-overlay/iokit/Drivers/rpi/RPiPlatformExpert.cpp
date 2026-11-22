@@ -242,7 +242,7 @@ RPiPublishDTChildren(IOService *parent, IORegistryEntry *dtNode)
 			if (nub->init(entry, gIODTPlane)) {
 				nub->attach(parent);
 				bool mbox = IODTMatchNubWithKeys(nub, "'brcm,bcm2835-mbox'");
-				bool pm = IODTMatchNubWithKeys(nub, "('brcm,bcm2835-pm-wdt', 'brcm,bcm2711-pm', 'brcm,bcm2712-pm')");
+				bool pm = IODTMatchNubWithKeys(nub, "('brcm,bcm2835-pm-wdt', 'brcm,bcm2711-pm', 'brcm,bcm2712-pm', 'snps,dw-wdt')");
 				if (mbox || pm) {
 					nub->getResources();
 				}

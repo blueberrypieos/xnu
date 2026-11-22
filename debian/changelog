@@ -1,3 +1,27 @@
+xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
+
+  * A third kernel, rk3566, for the Rockchip RK3566 of the Anbernic
+    RG353V: 16K pages, built for the Cortex-A55, with drivers for its
+    GICv3, its DesignWare UART and watchdog and its SD card slots. pieboot
+    picks it from the bundle by the board's compatible.
+  * The Raspberry Pi's SDHCI driver and the RK3566's DesignWare MMC driver
+    share the SD card protocol.
+  * The kernel's console also goes to a RAM console that pieboot names,
+    for the next system to read after a reset.
+  * The watchdog driver also runs a DesignWare watchdog.
+  * The xHCI driver leaves the RK3566's USB controllers alone. Their PHYs
+    and clocks are not set up yet.
+  * Making the first kext's text executable flushes the whole TLB. On the
+    RK3566 its constructors took an instruction fetch fault on about one
+    boot in eight.
+  * kern.version names each kernel's build again, such as
+    DEVELOPMENT_ARM64_BCM2712, so /etc/rc finds the SoC and loads the
+    kexts.conf lines tagged for it.
+  * The early kexts for the Raspberry Pi's devices load on its kernels
+    only.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
+
 xnu (12377.121.6+pie6) blueberry-pie-os; urgency=medium
 
   * A pool on file vdevs opens: a file's attributes now include its type.
