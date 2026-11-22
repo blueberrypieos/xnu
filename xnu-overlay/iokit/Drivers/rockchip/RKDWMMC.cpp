@@ -4,16 +4,13 @@
  */
 
 #include <IOKit/IOBufferMemoryDescriptor.h>
-#include <IOKit/IODeviceMemory.h>
-#include <IOKit/IODeviceTreeSupport.h>
-#include <IOKit/IOKitKeys.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IOMemoryDescriptor.h>
 #include <IOKit/IOPlatformExpert.h>
 #include <libkern/OSByteOrder.h>
 
-#include "../rpi/RPiPlatform.h"
 #include "../sdmmc/PIESDCard.h"
+#include "RKSoC.h"
 
 #include <pexpert/pexpert.h>
 
@@ -45,16 +42,14 @@ enum {
 };
 
 /*
- * RK3568 clock unit: the PLLs, their mode, the SD clocks' muxes, CLKSEL 30,
- * their parents' dividers, CLKSEL 75, 81 and 82, and the card clock phases.
+ * RK3568 clock unit: the SD clocks' muxes, CLKSEL 30, their parents'
+ * dividers, CLKSEL 75, 81 and 82, and the card clock phases.
  */
 enum {
-	CRU_GPLL_CON0 = 0x040, CRU_CPLL_CON0 = 0x060, CRU_MODE_CON = 0x0c0,
 	CRU_SDMMC_CON0 = 0x580,
 	CRU_PHASE_MASK = 0x6, CRU_PHASE_90 = 0x2,
 	CRU_PARENT_CPLL_100M = 3,
 };
-#define CRU_CLKSEL(i)   (0x100 + (i) * 4)
 
 class RKDWMMC : public PIESDCard
 {
@@ -73,7 +68,6 @@ class RKDWMMC : public PIESDCard
 	uint32_t rd(uint32_t off) { return regs[off / 4]; }
 	void wr(uint32_t off, uint32_t v) { regs[off / 4] = v; }
 	volatile uint32_t *cru(uint32_t off) { return (volatile uint32_t *)(cruMap->getVirtualAddress() + off); }
-	uint64_t pllRate(uint32_t con, unsigned modeShift);
 	uint64_t parentRate(unsigned sel);
 
 	bool waitClear(uint32_t off, uint32_t mask, uint32_t usec);
@@ -86,7 +80,6 @@ class RKDWMMC : public PIESDCard
 	void abortTransfer(void);
 	IOReturn readData(uint32_t index, uint32_t arg, void *buf, uint32_t blksz, uint32_t nblk);
 	IOReturn writeData(uint32_t index, uint32_t arg, const void *buf, uint32_t nblk);
-	void applyPinctrl(IOService *provider);
 	uint32_t ciuClock(IOService *provider);
 
 protected:
@@ -449,184 +442,18 @@ RKDWMMC::sdHighSpeedTiming(bool on)
 
 #pragma mark Rockchip
 
-/*
- * The first register range of a device tree node, uncached. The device
- * memory array belongs to the node's property, and is used through a
- * reference from copyProperty. Without that property the node's first
- * reg entry is resolved here, through its parent, and nothing is written
- * to the node: only its nub's resources set the property.
- */
-static IOMemoryMap *
-mapNode(IORegistryEntry *node)
-{
-	OSObject *prop = node->copyProperty(gIODeviceMemoryKey);
-	OSArray *mem = OSDynamicCast(OSArray, prop);
-	IOMemoryDescriptor *range = mem != NULL ? OSDynamicCast(IOMemoryDescriptor, mem->getObject(0)) : NULL;
-	IOMemoryMap *map = range != NULL ? range->map(kIOMapInhibitCache) : NULL;
-	if (prop == NULL) {
-		IORegistryEntry *parent = node->copyParentEntry(gIODTPlane);
-		OSObject *regProp = node->copyProperty("reg");
-		OSData *reg = OSDynamicCast(OSData, regProp);
-		UInt32 sizeCells = 0, addressCells = 0;
-		IOPhysicalAddress phys = 0;
-		IOPhysicalLength len = 0;
-		if (parent != NULL) {
-			IODTGetCellCounts(parent, &sizeCells, &addressCells);
-		}
-		if (parent != NULL && reg != NULL && sizeCells != 0 && reg->getLength() >= 4 * (sizeCells + addressCells) &&
-		    IODTResolveAddressCell(parent, (UInt32 *)(uintptr_t)reg->getBytesNoCopy(), &phys, &len)) {
-			IODeviceMemory *one = IODeviceMemory::withRange(phys, len);
-			map = one != NULL ? one->map(kIOMapInhibitCache) : NULL;
-			OSSafeReleaseNULL(one);
-		}
-		OSSafeReleaseNULL(regProp);
-		OSSafeReleaseNULL(parent);
-	}
-	OSSafeReleaseNULL(prop);
-	return map;
-}
-
-/*
- * The registers of the first node compatible with compat. A node that
- * its nub has replaced has no parent; the second lookup finds the nub.
- */
-static IOMemoryMap *
-mapCompatible(const char *compat)
-{
-	IOMemoryMap *map = NULL;
-	for (int tries = 0; map == NULL && tries < 2; tries++) {
-		OSArray *nodes = RPiDTFindCompatible(compat);
-		IORegistryEntry *node = nodes != NULL ? OSDynamicCast(IORegistryEntry, nodes->getObject(0)) : NULL;
-		map = node != NULL ? mapNode(node) : NULL;
-		OSSafeReleaseNULL(nodes);
-	}
-	return map;
-}
-
-/* The node below root with this phandle, retained; the walk starts again if the plane changes under it. */
-static IORegistryEntry *
-findPHandle(IORegistryEntry *root, uint32_t phandle)
-{
-	IORegistryIterator *it = IORegistryIterator::iterateOver(root, gIODTPlane, kIORegistryIterateRecursively);
-	IORegistryEntry *found = NULL;
-	if (it == NULL) {
-		return NULL;
-	}
-	do {
-		OSSafeReleaseNULL(found);
-		it->reset();
-		for (IORegistryEntry *e; (e = it->getNextObject()) != NULL;) {
-			OSData *ph = OSDynamicCast(OSData, e->getProperty("AAPL,phandle"));
-			if (ph != NULL && ph->getLength() == 4 && *(const uint32_t *)ph->getBytesNoCopy() == phandle) {
-				found = e;
-				found->retain();
-				break;
-			}
-		}
-	} while (found == NULL && !it->isValid());
-	it->release();
-	return found;
-}
-
-/*
- * The pins of pinctrl-0, set to their functions: GPIO0's in the PMU GRF,
- * GPIO1-4's in the GRF, four bits per pin and four pins per register,
- * written through the upper half's mask. The groups and their settings
- * are found from the device tree's root. The pin controller's node is
- * replaced by its nub while drivers start, and the node it replaces has
- * no children.
- */
-void
-RKDWMMC::applyPinctrl(IOService *provider)
-{
-	OSData *pc = OSDynamicCast(OSData, provider->getProperty("pinctrl-0"));
-	IORegistryEntry *root = IORegistryEntry::getRegistryRoot();
-	IOMemoryMap *grfMap = mapCompatible("rockchip,rk3568-grf");
-	IOMemoryMap *pmuMap = mapCompatible("rockchip,rk3568-pmugrf");
-	if (pc == NULL || grfMap == NULL || pmuMap == NULL) {
-		IOLog("RKDWMMC: %s: no pin configuration\n", provider->getName());
-		goto out;
-	}
-	for (unsigned i = 0; i < pc->getLength() / 4; i++) {
-		uint32_t ph = OSSwapBigToHostInt32(((const uint32_t *)pc->getBytesNoCopy())[i]);
-		IORegistryEntry *group = findPHandle(root, ph);
-		OSData *pins = group ? OSDynamicCast(OSData, group->getProperty("rockchip,pins")) : NULL;
-		if (pins == NULL) {
-			IOLog("RKDWMMC: %s: no pin group 0x%x\n", provider->getName(), ph);
-		}
-		for (unsigned j = 0; pins != NULL && j + 4 <= pins->getLength() / 4; j += 4) {
-			const uint32_t *q = (const uint32_t *)pins->getBytesNoCopy() + j;
-			uint32_t bank = OSSwapBigToHostInt32(q[0]), pin = OSSwapBigToHostInt32(q[1]);
-			uint32_t func = OSSwapBigToHostInt32(q[2]);
-			if (bank > 4 || pin > 31 || func > 7) {
-				continue;
-			}
-			volatile uint32_t *reg = bank == 0 ?
-			    (volatile uint32_t *)(pmuMap->getVirtualAddress() + (pin / 4) * 4) :
-			    (volatile uint32_t *)(grfMap->getVirtualAddress() + (bank - 1) * 0x20 + (pin / 4) * 4);
-			uint32_t shift = (pin % 4) * 4;
-			*reg = (0x7U << (shift + 16)) | (func << shift);
-
-			if (bank == 0) {
-				continue;
-			}
-			IORegistryEntry *conf = findPHandle(root, OSSwapBigToHostInt32(q[3]));
-			if (conf == NULL) {
-				IOLog("RKDWMMC: %s: no pin settings 0x%x for GPIO%u pin %u\n", provider->getName(),
-				    OSSwapBigToHostInt32(q[3]), bank, pin);
-				continue;
-			}
-			int pull = conf->getProperty("bias-pull-up") ? 1 : conf->getProperty("bias-pull-down") ? 2 :
-			    conf->getProperty("bias-disable") ? 0 : -1;
-			if (pull >= 0) {
-				reg = (volatile uint32_t *)(grfMap->getVirtualAddress() + 0x80 + (bank - 1) * 0x10 + (pin / 8) * 4);
-				shift = (pin % 8) * 2;
-				*reg = (0x3U << (shift + 16)) | ((uint32_t)pull << shift);
-			}
-			OSData *ds = OSDynamicCast(OSData, conf->getProperty("drive-strength"));
-			if (ds != NULL && ds->getLength() == 4) {
-				uint32_t level = OSSwapBigToHostInt32(*(const uint32_t *)ds->getBytesNoCopy());
-				reg = (volatile uint32_t *)(grfMap->getVirtualAddress() + 0x200 + (bank - 1) * 0x40 + (pin / 2) * 4);
-				shift = (pin % 2) * 8;
-				*reg = (0x3fU << (shift + 16)) | ((((1U << (level + 1)) - 1) & 0x3f) << shift);
-			}
-			conf->release();
-		}
-		OSSafeReleaseNULL(group);
-	}
-out:
-	OSSafeReleaseNULL(grfMap);
-	OSSafeReleaseNULL(pmuMap);
-}
-
-uint64_t
-RKDWMMC::pllRate(uint32_t con, unsigned modeShift)
-{
-	if (((*cru(CRU_MODE_CON) >> modeShift) & 3) != 1) {
-		return 24000000;
-	}
-	uint32_t c0 = *cru(con), c1 = *cru(con + 4), c2 = *cru(con + 8);
-	uint64_t fbdiv = c0 & 0xfff, postdiv1 = (c0 >> 12) & 7, refdiv = c1 & 0x3f, postdiv2 = (c1 >> 6) & 7;
-	if (postdiv1 == 0 || postdiv2 == 0 || refdiv == 0) {
-		return 0;
-	}
-	uint64_t hz = 24000000ULL * fbdiv / refdiv;
-	if (!(c1 & (1U << 12))) {
-		hz += (24000000ULL * (c2 & 0xffffff) / refdiv) >> 24;
-	}
-	return hz / postdiv1 / postdiv2;
-}
-
 uint64_t
 RKDWMMC::parentRate(unsigned sel)
 {
-	uint32_t c75 = *cru(CRU_CLKSEL(75)), c81 = *cru(CRU_CLKSEL(81)), c82 = *cru(CRU_CLKSEL(82));
+	uint32_t c75 = *cru(RK_CRU_CLKSEL(75)), c81 = *cru(RK_CRU_CLKSEL(81)), c82 = *cru(RK_CRU_CLKSEL(82));
+	uint64_t gpll = RKPLLRate(cruMap, RK_CRU_GPLL_CON0, RK_CRU_MODE_CON, RK_CRU_GPLL_MODE_SHIFT);
+	uint64_t cpll = RKPLLRate(cruMap, RK_CRU_CPLL_CON0, RK_CRU_MODE_CON, RK_CRU_CPLL_MODE_SHIFT);
 	switch (sel) {
 	case 0: return 24000000;
-	case 1: return pllRate(CRU_GPLL_CON0, 6) / ((c75 & 0x1f) + 1);
-	case 2: return pllRate(CRU_GPLL_CON0, 6) / (((c75 >> 8) & 0x1f) + 1);
-	case 3: return pllRate(CRU_CPLL_CON0, 4) / ((c82 & 0x1f) + 1);
-	case 4: return pllRate(CRU_CPLL_CON0, 4) / ((c81 & 0x1f) + 1);
+	case 1: return gpll / ((c75 & 0x1f) + 1);
+	case 2: return gpll / (((c75 >> 8) & 0x1f) + 1);
+	case 3: return cpll / ((c82 & 0x1f) + 1);
+	case 4: return cpll / ((c81 & 0x1f) + 1);
 	case 5: return 24000000 / (((c82 >> 8) & 0x3f) + 1);
 	default: return 0;
 	}
@@ -643,22 +470,22 @@ RKDWMMC::ciuClock(IOService *provider)
 	uint64_t pa = regsMap->getPhysicalAddress();
 	uint32_t shift = pa == 0xfe2b0000ULL ? 8 : pa == 0xfe2c0000ULL ? 12 : 0;
 	cruIndex = shift == 8 ? 0 : 1;
-	cruMap = shift ? mapCompatible("rockchip,rk3568-cru") : NULL;
+	cruMap = shift ? RKMapCompatible("rockchip,rk3568-cru") : NULL;
 	if (cruMap == NULL) {
 		IOLog("RKDWMMC: %s: unknown clock; assuming 24 MHz\n", provider->getName());
 		return 24000000;
 	}
 	drivePhase = *cru(CRU_SDMMC_CON0 + 8 * cruIndex) & CRU_PHASE_MASK;
-	unsigned sel = (*cru(CRU_CLKSEL(30)) >> shift) & 7;
+	unsigned sel = (*cru(RK_CRU_CLKSEL(30)) >> shift) & 7;
 	uint64_t hz = parentRate(sel);
 	uint32_t want = CRU_PARENT_CPLL_100M;
 	uint64_t wantHz = parentRate(want);
 	IOLog("RKDWMMC: %s: clock parent %u, %llu Hz; parent %u is %llu Hz; phases 0x%x 0x%x\n", provider->getName(),
 	    sel, hz, want, wantHz, *cru(CRU_SDMMC_CON0 + 8 * cruIndex), *cru(CRU_SDMMC_CON0 + 8 * cruIndex + 4));
 	if (want != sel && wantHz >= 24000000 && wantHz <= 300000000 && hz / 2 < kSDClockHighSpeedHz) {
-		*cru(CRU_CLKSEL(30)) = (7U << (shift + 16)) | (want << shift);
+		*cru(RK_CRU_CLKSEL(30)) = (7U << (shift + 16)) | (want << shift);
 		IODelay(100);
-		sel = (*cru(CRU_CLKSEL(30)) >> shift) & 7;
+		sel = (*cru(RK_CRU_CLKSEL(30)) >> shift) & 7;
 		hz = parentRate(sel);
 		IOLog("RKDWMMC: %s: clock parent now %u, %llu Hz\n", provider->getName(), sel, hz);
 	}
@@ -696,7 +523,7 @@ RKDWMMC::start(IOService *provider)
 		fifoDepth = OSSwapBigToHostInt32(*(const uint32_t *)fd->getBytesNoCopy());
 	}
 
-	applyPinctrl(provider);
+	RKApplyPinctrl(provider, "RKDWMMC");
 	busHz = ciuClock(provider) / 2;
 	IOLog("RKDWMMC: %s at 0x%llx, version 0x%x, FIFO %u words, controller clock %u MHz%s\n",
 	    provider->getName(), regsMap->getPhysicalAddress(), rd(DW_VERID), fifoDepth, busHz / 1000000,

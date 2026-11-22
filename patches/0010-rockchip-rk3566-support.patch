@@ -4,18 +4,19 @@ Description: Rockchip RK3566 support
  GIC interface with a GICv2 and a GICv3 implementation.
 Author: The Blueberry Pie OS Authors
 Forwarded: not-needed
-Last-Update: 2026-11-18
+Last-Update: 2026-11-19
 --- a/xnu/iokit/KernelConfigTables.cpp
 +++ b/xnu/iokit/KernelConfigTables.cpp
-@@ -27,6 +27,7 @@
+@@ -27,6 +27,8 @@
   */
  /* Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)). */
  /* Modified 2026-11-14: OpenZFS built into the kernel (APSL 2.0 section 2.2(b)). */
 +/* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-19: Rockchip RK3566 I2C, PMIC, USB 2 PHY and EHCI drivers (APSL 2.0 section 2.2(b)). */
  /*
   * NOTICE: This file was modified by SPARTA, Inc. in 2005 to introduce
   * support for mandatory and extensible security protections.  This notice
-@@ -42,7 +43,7 @@
+@@ -42,7 +44,7 @@
      "   {"
      "     'IOClass'         = RPiPlatformExpert;"
      "     'IOProviderClass' = IOPlatformExpertDevice;"
@@ -24,7 +25,7 @@ Last-Update: 2026-11-18
      "     'IOProbeScore'    = 1000:32;"
      "   },"
      "   {"
-@@ -53,7 +54,7 @@
+@@ -53,7 +55,7 @@
      "   {"
      "     'IOClass'         = RPiGICInterruptController;"
      "     'IOProviderClass' = IOPlatformDevice;"
@@ -33,7 +34,7 @@ Last-Update: 2026-11-18
      "   },"
      "   {"
      "     'IOClass'         = RPiL2InterruptController;"
-@@ -71,6 +72,11 @@
+@@ -71,6 +73,31 @@
      "     'IONameMatch'     = ('brcm,bcm2711-emmc2', 'brcm,bcm2835-sdhci', 'brcm,bcm2712-sdhci');"
      "   },"
      "   {"
@@ -42,26 +43,58 @@ Last-Update: 2026-11-18
 +    "     'IONameMatch'     = 'rockchip,rk3568-dw-mshc';"
 +    "   },"
 +    "   {"
++    "     'IOClass'         = RKI2C;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'rockchip,rk3568-i2c';"
++    "   },"
++    "   {"
++    "     'IOClass'         = RK817;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'rockchip,rk817';"
++    "   },"
++    "   {"
++    "     'IOClass'         = RKUSB2PHY;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'rockchip,rk3568-usb2phy';"
++    "   },"
++    "   {"
++    "     'IOClass'         = RKEHCI;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'generic-ehci';"
++    "   },"
++    "   {"
      "     'IOClass'         = RPiPCIe;"
      "     'IOProviderClass' = IOPlatformDevice;"
      "     'IONameMatch'     = ('brcm,bcm2711-pcie', 'brcm,bcm2712-pcie');"
 --- a/xnu/iokit/conf/files.arm64
 +++ b/xnu/iokit/conf/files.arm64
-@@ -1,4 +1,5 @@
+@@ -1,4 +1,6 @@
  # Modified 2026-11-01: Raspberry Pi 4 and 5 support (APSL 2.0 section 2.2(b)).
 +# Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-19: Rockchip RK3566 I2C, PMIC, USB 2 PHY and EHCI drivers (APSL 2.0 section 2.2(b)).
  # Portions Copyright (c) Apple Inc. All rights reserved.
  #
  # This file contains Original Code and/or Modifications of Original Code
-@@ -31,6 +32,8 @@
+@@ -31,11 +33,19 @@
  iokit/Drivers/rpi/RPiPSCIPMGR.cpp					optional config_rpi
  iokit/Drivers/rpi/RPiWatchdogEarly.cpp				optional config_rpi
  iokit/Drivers/rpi/RPiSDHCI.cpp					optional config_rpi
 +iokit/Drivers/sdmmc/PIESDCard.cpp				optional config_rpi
 +iokit/Drivers/rockchip/RKDWMMC.cpp				optional config_rpi
++iokit/Drivers/rockchip/RKSoC.cpp				optional config_rpi
++iokit/Drivers/rockchip/RKI2C.cpp				optional config_rpi
++iokit/Drivers/rockchip/RK817.cpp				optional config_rpi
++iokit/Drivers/rockchip/RKUSB2PHY.cpp				optional config_rpi
++iokit/Drivers/rockchip/RKEHCI.cpp				optional config_rpi
  iokit/Drivers/rpi/RPiPCIe.cpp					optional config_rpi
  iokit/Drivers/rpi/RPiMIP.cpp					optional config_rpi
  iokit/Drivers/rpi/RP1.cpp					optional config_rpi
+ iokit/Drivers/rpi/PIEBootUUID.cpp				optional config_rpi
+ iokit/Drivers/usb/XHCIController.cpp				optional config_rpi
++iokit/Drivers/usb/EHCIController.cpp				optional config_rpi
+ iokit/Drivers/usb/PIEUSBHID.cpp				optional config_rpi
+ iokit/Drivers/usb/PIEUSBMassStorage.cpp			optional config_rpi
+ iokit/Drivers/nvme/PIENVMe.cpp				optional config_rpi
 --- a/xnu/makedefs/MakeInc.def
 +++ b/xnu/makedefs/MakeInc.def
 @@ -7,6 +7,7 @@

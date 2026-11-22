@@ -5,10 +5,11 @@
 /*
  * <pie/usb.h>: the kernel's USB interfaces, for USB drivers in kexts, from
  * the com.blueberrypieos.kpi.platform symbol set (config/PIE.exports).
- * iokit/Drivers/usb/XHCIController.cpp implements them.
+ * iokit/Drivers/usb/XHCIController.cpp implements them, for its own
+ * devices and the EHCI driver's.
  *
- * The xHCI driver configures each device's first configuration and
- * publishes a PIEUSBInterface for each of its interfaces, alternate
+ * The host controller drivers configure each device's first configuration
+ * and publish a PIEUSBInterface for each of its interfaces, alternate
  * setting 0. A driver matches one with IOProviderClass PIEUSBInterface and
  * the properties idVendor, idProduct, bInterfaceNumber, bInterfaceClass,
  * bInterfaceSubClass and bInterfaceProtocol. port and speed say where the
@@ -16,11 +17,14 @@
  * device goes, the interface terminates, and every call returns
  * kIOReturnNoDevice. Every call also returns it once ep0 cannot be reset
  * after a failed request, once an endpoint that bulkTransfer uses does not
- * reset, and once the controller takes no more commands because one could
- * neither finish nor be aborted.
+ * reset, and once the controller takes no more commands: an xHCI
+ * controller when a command could neither finish nor be aborted, an EHCI
+ * controller when it halts, reports a host system error, or does not stop
+ * or start its asynchronous schedule.
  *
  * A kext may call controlRequest, clearHalt and the bulk queue calls.
- * startInterruptIn and bulkTransfer are for the kernel's own drivers.
+ * startInterruptIn and bulkTransfer are for the kernel's own drivers; on
+ * the EHCI driver's devices startInterruptIn returns kIOReturnUnsupported.
  * Every call but queueBulkOut waits for the device or the controller, so
  * a driver makes them from its own threads, never from an action.
  */
@@ -30,7 +34,7 @@
 
 #include <IOKit/IOService.h>
 
-class XHCIController;
+class PIEUSBHost;
 
 typedef void (*PIEUSBInterruptAction)(OSObject *target, const uint8_t *data, uint32_t length);
 
@@ -58,7 +62,7 @@ class PIEUSBInterface : public IOService
 	OSDeclareDefaultStructors(PIEUSBInterface);
 
 public:
-	XHCIController *controller;
+	PIEUSBHost *controller;
 	uint32_t slot;
 	uint32_t generation;
 	uint8_t number;

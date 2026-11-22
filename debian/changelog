@@ -9,8 +9,7 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
   * The kernel's console also goes to a RAM console that pieboot names,
     for the next system to read after a reset.
   * The watchdog driver also runs a DesignWare watchdog.
-  * The xHCI driver leaves the RK3566's USB controllers alone. Their PHYs
-    and clocks are not set up yet.
+  * The xHCI driver leaves the RK3566's DWC3 USB controllers alone.
   * Making the first kext's text executable flushes the whole TLB. On the
     RK3566 its constructors took an instruction fetch fault on about one
     boot in eight.
@@ -65,6 +64,24 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
   * Root may add and remove IOKit personalities in the IOCatalogue.
   * The kernel depends on kext-tools 2, which has kextd, and on
     base-files 6, whose rc starts it.
+  * An EHCI driver runs the RK3566's USB 2 host port behind the RG353V's
+    host USB-C socket, for high-speed devices and high-speed hubs.
+  * A new I2C driver reaches the RK817 PMIC, whose BOOST feeds that
+    socket's 5 V. BOOST cannot be used with the charger, so the driver
+    checks the charger's USB power every 50 ms. BOOST is turned off when
+    that power comes, or once it has not read for 50 ms. If the charger's
+    status stops reading as that power comes, or as the driver starts
+    with it, BOOST can run with it for at most 240 ms, not counting time
+    the CPU spends on other work. That holds while BOOST's own register,
+    POWER_EN3, can be read and written. In simulation the longest was
+    237.44 ms. When an access to POWER_EN3 fails, the OFF is tried again
+    and logged, and BOOST runs with that power until the bus answers.
+    BOOST is turned on while a check reads no USB power, from the boot
+    volume on or a minute after start. It is turned off when the system
+    halts or restarts. hw.battery.boost shows its state.
+  * The RK817's charger and gas gauge show as a battery, RK817Battery,
+    and as sysctls under hw.battery. On the RG353V the charger's USB
+    input limit is set to 1.5 A.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
 

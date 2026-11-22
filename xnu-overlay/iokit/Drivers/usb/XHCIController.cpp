@@ -164,7 +164,7 @@ kept_queue(const struct Device *d, uint32_t dci)
 	return false;
 }
 
-class XHCIController : public IOService
+class XHCIController : public PIEUSBHost
 {
 	OSDeclareDefaultStructors(XHCIController);
 
@@ -265,34 +265,33 @@ class XHCIController : public IOService
 	    uint16_t wIndex, uint16_t wLength, void *data);
 	void setupHub(uint32_t slot, const uint8_t *cfg, uint32_t cfgLength);
 	void scanHub(uint32_t slot);
-	void publishInterfaces(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, uint32_t cfgLength);
 
 public:
 	virtual bool start(IOService *provider) APPLE_KEXT_OVERRIDE;
 	virtual void stop(IOService *provider) APPLE_KEXT_OVERRIDE;
 
-	bool current(uint32_t slot, uint32_t generation)
+	virtual bool current(uint32_t slot, uint32_t generation) APPLE_KEXT_OVERRIDE
 	{
 		return slot >= 1 && slot <= MAX_SLOTS && devices[slot].used && !devices[slot].gone &&
 		       !devices[slot].broken && (generation == 0 || devices[slot].generation == generation);
 	}
 
-	IOReturn controlTransfer(uint32_t slot, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
-	    uint16_t wIndex, uint16_t wLength, void *data, uint32_t *actual, uint32_t generation = 0);
-	IOReturn startInterruptIn(uint32_t slot, const struct PIEUSBEndpoint *ep, OSObject *target,
-	    PIEUSBInterruptAction action, uint32_t generation = 0);
-	IOReturn bulkTransfer(uint32_t slot, const struct PIEUSBEndpoint *ep, void *data, uint32_t length,
-	    uint32_t *actual, uint32_t generation = 0);
-	IOReturn resetPipe(uint32_t slot, uint8_t endpointAddress, uint32_t generation = 0);
-	IOReturn startQueue(uint32_t slot, const struct PIEUSBEndpoint *ep, uint32_t size, uint32_t count,
-	    OSObject *target, PIEUSBQueueAction action, uint32_t generation);
-	IOReturn queueOut(uint32_t slot, uint8_t endpointAddress, const void *data, uint32_t length,
-	    uint32_t generation);
-	IOReturn stopQueue(uint32_t slot, uint8_t endpointAddress, uint32_t generation);
+	virtual IOReturn controlTransfer(uint32_t slot, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue,
+	    uint16_t wIndex, uint16_t wLength, void *data, uint32_t *actual, uint32_t generation = 0) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn startInterruptIn(uint32_t slot, const struct PIEUSBEndpoint *ep, OSObject *target,
+	    PIEUSBInterruptAction action, uint32_t generation = 0) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn bulkTransfer(uint32_t slot, const struct PIEUSBEndpoint *ep, void *data, uint32_t length,
+	    uint32_t *actual, uint32_t generation = 0) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn resetPipe(uint32_t slot, uint8_t endpointAddress, uint32_t generation = 0) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn startQueue(uint32_t slot, const struct PIEUSBEndpoint *ep, uint32_t size, uint32_t count,
+	    OSObject *target, PIEUSBQueueAction action, uint32_t generation) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn queueOut(uint32_t slot, uint8_t endpointAddress, const void *data, uint32_t length,
+	    uint32_t generation) APPLE_KEXT_OVERRIDE;
+	virtual IOReturn stopQueue(uint32_t slot, uint8_t endpointAddress, uint32_t generation) APPLE_KEXT_OVERRIDE;
 };
 
-#define super IOService
-OSDefineMetaClassAndStructors(XHCIController, IOService);
+#define super PIEUSBHost
+OSDefineMetaClassAndStructors(XHCIController, PIEUSBHost);
 
 #pragma mark DMA pool and rings
 
@@ -1449,7 +1448,7 @@ XHCIController::attachDevice(uint8_t rootPort, uint32_t route, uint8_t depth, ui
 		if (dev[4] == 9) {
 			setupHub(slot, cfg, length);
 		}
-		publishInterfaces(slot, dev, cfg, length);
+		publishInterfaces(slot, d->generation, d->port, d->speed, dev, cfg, length);
 	}
 	IOFreeData(cfg, total);
 	if (!ok) {
@@ -1565,23 +1564,7 @@ XHCIController::detachDevice(uint32_t slot)
 		dead = next;
 	}
 
-	OSIterator *children = getChildIterator(gIOServicePlane);
-	OSArray *gone = OSArray::withCapacity(4);
-	if (children != NULL && gone != NULL) {
-		while (OSObject *child = children->getNextObject()) {
-			PIEUSBInterface *intf = OSDynamicCast(PIEUSBInterface, child);
-			if (intf != NULL && intf->slot == slot && intf->generation == d->generation) {
-				gone->setObject(intf);
-			}
-		}
-	}
-	OSSafeReleaseNULL(children);
-	if (gone != NULL) {
-		for (unsigned i = 0; i < gone->getCount(); i++) {
-			((IOService *)gone->getObject(i))->terminate();
-		}
-		gone->release();
-	}
+	terminateInterfaces(slot, d->generation);
 
 	for (uint32_t dci = 0; dci < MAX_DCI && clean; dci++) {
 		if (pipes[dci] != NULL) {
@@ -1767,64 +1750,6 @@ XHCIController::scanHub(uint32_t slot)
 		uint32_t route = d->route | (uint32_t)(p < 15 ? p : 15) << (4 * d->depth);
 		uint32_t child = attachDevice(d->port, route, (uint8_t)(d->depth + 1), speed, slot, p);
 		d->hubChild[p] = child != 0 ? (uint8_t)child : 0xff;
-	}
-}
-
-void
-XHCIController::publishInterfaces(uint32_t slot, const uint8_t *dev, const uint8_t *cfg, uint32_t cfgLength)
-{
-	PIEUSBInterface *intf = NULL;
-	for (uint32_t off = 0; off + 2 <= cfgLength && cfg[off] >= 2; off += cfg[off]) {
-		const uint8_t *desc = cfg + off;
-		if (off + desc[0] > cfgLength) {
-			break;
-		}
-		if (desc[1] == 4 && desc[0] >= 9) {
-			if (intf != NULL) {
-				if (intf->attach(this)) {
-					intf->registerService();
-				}
-				OSSafeReleaseNULL(intf);
-			}
-			if (desc[3] != 0) {
-				continue;
-			}
-			intf = OSTypeAlloc(PIEUSBInterface);
-			if (intf == NULL || !intf->init()) {
-				OSSafeReleaseNULL(intf);
-				continue;
-			}
-			intf->controller = this;
-			intf->slot = slot;
-			intf->generation = devices[slot].generation;
-			intf->number = desc[2];
-			intf->setProperty("idVendor", OSReadLittleInt16(dev, 8), 32);
-			intf->setProperty("idProduct", OSReadLittleInt16(dev, 10), 32);
-			intf->setProperty("bInterfaceNumber", desc[2], 32);
-			intf->setProperty("bInterfaceClass", desc[5], 32);
-			intf->setProperty("bInterfaceSubClass", desc[6], 32);
-			intf->setProperty("bInterfaceProtocol", desc[7], 32);
-			intf->setProperty("port", devices[slot].port, 32);
-			intf->setProperty("speed", devices[slot].speed, 32);
-			char loc[8];
-			snprintf(loc, sizeof(loc), "%u", desc[2]);
-			intf->setLocation(loc);
-		} else if (desc[1] == 0x21 && desc[0] >= 9 && intf != NULL && desc[6] == 0x22) {
-			intf->setProperty("HIDReportDescriptorLength", OSReadLittleInt16(desc, 7), 32);
-		} else if (desc[1] == 5 && desc[0] >= 7 && (desc[2] & 0xf) != 0 && intf != NULL &&
-		    intf->numEndpoints < sizeof(intf->endpoints) / sizeof(intf->endpoints[0])) {
-			struct PIEUSBEndpoint *ep = &intf->endpoints[intf->numEndpoints++];
-			ep->address = desc[2];
-			ep->attributes = desc[3];
-			ep->maxPacket = OSReadLittleInt16(desc, 4);
-			ep->interval = desc[6];
-		}
-	}
-	if (intf != NULL) {
-		if (intf->attach(this)) {
-			intf->registerService();
-		}
-		intf->release();
 	}
 }
 
@@ -2062,6 +1987,93 @@ XHCIController::stop(IOService *provider)
 		workLoop->removeEventSource(intSource);
 	}
 	super::stop(provider);
+}
+
+#pragma mark PIEUSBHost
+
+#undef super
+#define super IOService
+OSDefineMetaClassAndAbstractStructors(PIEUSBHost, IOService);
+
+void
+PIEUSBHost::publishInterfaces(uint32_t slot, uint32_t generation, uint8_t port, uint8_t speed, const uint8_t *dev,
+    const uint8_t *cfg, uint32_t cfgLength)
+{
+	PIEUSBInterface *intf = NULL;
+	for (uint32_t off = 0; off + 2 <= cfgLength && cfg[off] >= 2; off += cfg[off]) {
+		const uint8_t *desc = cfg + off;
+		if (off + desc[0] > cfgLength) {
+			break;
+		}
+		if (desc[1] == 4 && desc[0] >= 9) {
+			if (intf != NULL) {
+				if (intf->attach(this)) {
+					intf->registerService();
+				}
+				OSSafeReleaseNULL(intf);
+			}
+			if (desc[3] != 0) {
+				continue;
+			}
+			intf = OSTypeAlloc(PIEUSBInterface);
+			if (intf == NULL || !intf->init()) {
+				OSSafeReleaseNULL(intf);
+				continue;
+			}
+			intf->controller = this;
+			intf->slot = slot;
+			intf->generation = generation;
+			intf->number = desc[2];
+			intf->setProperty("idVendor", OSReadLittleInt16(dev, 8), 32);
+			intf->setProperty("idProduct", OSReadLittleInt16(dev, 10), 32);
+			intf->setProperty("bInterfaceNumber", desc[2], 32);
+			intf->setProperty("bInterfaceClass", desc[5], 32);
+			intf->setProperty("bInterfaceSubClass", desc[6], 32);
+			intf->setProperty("bInterfaceProtocol", desc[7], 32);
+			intf->setProperty("port", port, 32);
+			intf->setProperty("speed", speed, 32);
+			char loc[8];
+			snprintf(loc, sizeof(loc), "%u", desc[2]);
+			intf->setLocation(loc);
+		} else if (desc[1] == 0x21 && desc[0] >= 9 && intf != NULL && desc[6] == 0x22) {
+			intf->setProperty("HIDReportDescriptorLength", OSReadLittleInt16(desc, 7), 32);
+		} else if (desc[1] == 5 && desc[0] >= 7 && (desc[2] & 0xf) != 0 && intf != NULL &&
+		    intf->numEndpoints < sizeof(intf->endpoints) / sizeof(intf->endpoints[0])) {
+			struct PIEUSBEndpoint *ep = &intf->endpoints[intf->numEndpoints++];
+			ep->address = desc[2];
+			ep->attributes = desc[3];
+			ep->maxPacket = OSReadLittleInt16(desc, 4);
+			ep->interval = desc[6];
+		}
+	}
+	if (intf != NULL) {
+		if (intf->attach(this)) {
+			intf->registerService();
+		}
+		intf->release();
+	}
+}
+
+void
+PIEUSBHost::terminateInterfaces(uint32_t slot, uint32_t generation)
+{
+	OSIterator *children = getChildIterator(gIOServicePlane);
+	OSArray *gone = OSArray::withCapacity(4);
+	if (children != NULL && gone != NULL) {
+		while (OSObject *child = children->getNextObject()) {
+			PIEUSBInterface *intf = OSDynamicCast(PIEUSBInterface, child);
+			if (intf != NULL && intf->slot == slot && intf->generation == generation) {
+				gone->setObject(intf);
+			}
+		}
+	}
+	OSSafeReleaseNULL(children);
+	if (gone != NULL) {
+		for (unsigned i = 0; i < gone->getCount(); i++) {
+			((IOService *)gone->getObject(i))->terminate();
+		}
+		gone->release();
+	}
 }
 
 #pragma mark PIEUSBInterface
