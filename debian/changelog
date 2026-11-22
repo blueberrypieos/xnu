@@ -32,6 +32,8 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
     stop working after about 15 attaches.
   * The xHCI driver runs a hub with multiple TTs in its single-TT default
     setting, and says so to the controller.
+  * Device-tree properties with names of 32 to 255 characters, which
+    pieboot passes encoded, reach drivers under their full names.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
 

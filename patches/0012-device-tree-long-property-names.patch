@@ -1,0 +1,54 @@
+Description: device tree properties whose names have 32 to 255 characters
+ xnu's flattened device tree holds property names of up to 31
+ characters, so pieboot passes a property with a name of 32 to 255
+ characters as pieboot,long,N, N counting from 0 in its node, whose value
+ is the name, a NUL, then the property's value. MakeReferenceTable, which
+ builds the device tree plane, gives such a property its name back and a
+ copy of its value, so drivers find it under its own name, 4-byte aligned
+ like every other value. A pieboot,long,N value whose name is shorter or
+ longer, or has no NUL before its end, stays as it is. The early boot
+ code, which reads the flattened tree, sees only the pieboot,long,N names.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-19
+
+--- a/xnu/iokit/Kernel/IODeviceTreeSupport.cpp
++++ b/xnu/iokit/Kernel/IODeviceTreeSupport.cpp
+@@ -25,6 +25,7 @@
+  *
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
++/* Modified 2026-11-19: a property that pieboot passes as pieboot,long,N gets back its name of 32 to 255 characters and a copy of its value (APSL 2.0 section 2.2(b)). */
+ 
+ #include <IOKit/IODeviceTreeSupport.h>
+ #include <libkern/c++/OSContainers.h>
+@@ -417,6 +418,9 @@
+ 	}
+ }
+ 
++static const char kPIELongNamePrefix[] = "pieboot,long,";
++static const size_t kPIELongNameMax = 255;
++
+ static IORegistryEntry *
+ MakeReferenceTable( DTEntry dtEntry, bool copy )
+ {
+@@ -450,7 +454,18 @@
+ 				continue;
+ 			}
+ 
+-			if (copy) {
++			bool decoded = false;
++			if (!strncmp(name, kPIELongNamePrefix, sizeof(kPIELongNamePrefix) - 1)) {
++				size_t length = strnlen((const char *) prop, propSize);
++				if (length >= kPropNameLength && length <= kPIELongNameMax && length < propSize) {
++					name = (const char *) prop;
++					prop = (const char *) prop + length + 1;
++					propSize -= (unsigned int) length + 1;
++					decoded = true;
++				}
++			}
++
++			if (copy || decoded) {
+ 				nameKey = OSSymbol::withCString(name);
+ 				data = OSData::withBytes(prop, propSize);
+ 			} else {
