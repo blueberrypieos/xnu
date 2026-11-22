@@ -111,6 +111,14 @@ xnu (12377.121.6+pie8) blueberry-pie-os; urgency=medium
     through WL_ON. The boot-arg pie_sdio=0 leaves the slot to the SD card
     driver.
   * Build-Depend on pietoolchain-host and pietoolchain-sdk.
+  * A zfs command that looks up a mounted dataset no longer holds the pool
+    while it waits for the mount, so it cannot deadlock with a remount
+    and the pool's sync. zfs get reads a temporary property without
+    waiting for the mount.
+  * A remount keeps the mount's own options while it registers the
+    property callbacks again. For that moment, a read-only mount of a
+    writable dataset accepted writes, and nosuid, noexec and nodev were
+    off.
 
  -- Maxwell <maxwell@blueberrypieos.com>  Wed, 18 Nov 2026 15:00:00 +0000
 

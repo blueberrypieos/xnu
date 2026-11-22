@@ -39,9 +39,15 @@ Description: OpenZFS built into the kernel
  the pool.
  A whole disk that has not settled is probed again later and does not
  hold up the import, and each pass frees its list of pool configs.
+ Looking up a mounted dataset by name no longer waits for the mount while
+ it holds the pool: it tries with vfs_busy_try() and, if a remount holds
+ the mount, lets go of everything and tries again. A temporary property
+ is read without making the mount busy.
+ While the property callbacks are registered, they keep the mount's own
+ options in the flags they set.
 Author: The Blueberry Pie OS Authors
 Forwarded: not-needed
-Last-Update: 2026-11-17
+Last-Update: 2026-11-18
 
 diff --git a/src/openzfs/include/os/macos/spl/sys/fcntl.h b/src/openzfs/include/os/macos/spl/sys/fcntl.h
 index 1a4d8fb547..10432350af 100644
@@ -129,6 +135,26 @@ index 3b33458329..ede1449ea3 100644
  #include <sys/_types/_ptrdiff_t.h>
  #endif
  
+diff --git a/src/openzfs/include/os/macos/zfs/sys/zfs_vfsops_os.h b/src/openzfs/include/os/macos/zfs/sys/zfs_vfsops_os.h
+index ccb765bd2f..3a2b36bb6b 100644
+--- a/src/openzfs/include/os/macos/zfs/sys/zfs_vfsops_os.h
++++ b/src/openzfs/include/os/macos/zfs/sys/zfs_vfsops_os.h
+@@ -18,6 +18,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-18 by The Blueberry Pie OS Authors: z_regkeep notes the mount options that registering the property callbacks keeps (CDDL-1.0 section 3.3). */
+ /*
+  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+  */
+@@ -132,6 +133,7 @@ struct zfsvfs {
+ #ifdef __APPLE__
+ 	dev_t	z_rdev;	/* proxy device for mount */
+ 	boolean_t	z_rdonly;	/* is mount read-only? */
++	uint32_t	z_regkeep;
+ 	time_t	z_mount_time;	/* mount timestamp (for Spotlight) */
+ 	time_t	z_last_unmount_time;	/* unmount timestamp (for Spotlight) */
+ 	boolean_t	z_xattr;	/* enable atimes mount option */
 diff --git a/src/openzfs/include/os/macos/zfs/sys/zvol_os.h b/src/openzfs/include/os/macos/zfs/sys/zvol_os.h
 index bd84953f02..0387357901 100644
 --- a/src/openzfs/include/os/macos/zfs/sys/zvol_os.h
@@ -581,18 +607,70 @@ index 19c2a1c0e7..1f9db8c8e9 100644
  	return (0);
  }
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c b/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
-index 54978f8fa1..8285e69349 100644
+index 54978f8fa1..2b15ccc82b 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
 +++ b/src/openzfs/module/os/macos/zfs/zfs_ioctl_os.c
-@@ -18,6 +18,7 @@
+@@ -18,6 +18,8 @@
   *
   * CDDL HEADER END
   */
 +/* Modified 2026-11-14 by The Blueberry Pie OS Authors: creating a dataset's proxy device needs the same policy as removing it (CDDL-1.0 section 3.3). */
++/* Modified 2026-11-18 by The Blueberry Pie OS Authors: a mounted dataset is looked up by name without waiting for its mount while the pool is held (CDDL-1.0 section 3.3). */
  
  /*
   * Copyright (c) 2013, 2020 Jorgen Lundman <lundman@lundman.net>
-@@ -219,12 +220,6 @@ out:
+@@ -34,6 +36,7 @@
+ #include <sys/stat.h>
+ #include <sys/zfs_ioctl.h>
+ #include <sys/zfs_vfsops.h>
++#include <sys/dmu_objset.h>
+ #include <sys/zap.h>
+ #include <sys/spa.h>
+ #include <sys/nvpair.h>
+@@ -82,6 +85,42 @@ zfs_vfs_rele(zfsvfs_t *zfsvfs)
+ 	vfs_unbusy(zfsvfs->z_vfs);
+ }
+ 
++extern int vfs_busy_try(mount_t);
++
++int
++zfs_vfs_hold_byname(const char *dsname, zfsvfs_t **zfvp)
++{
++	objset_t *os;
++	zfsvfs_t *zfsvfs;
++	int error;
++
++	*zfvp = NULL;
++	for (;;) {
++		error = dmu_objset_hold(dsname, FTAG, &os);
++		if (error != 0)
++			return (error);
++		if (dmu_objset_type(os) != DMU_OST_ZFS) {
++			dmu_objset_rele(os, FTAG);
++			return (SET_ERROR(EINVAL));
++		}
++		mutex_enter(&os->os_user_ptr_lock);
++		zfsvfs = dmu_objset_get_user(os);
++		if (zfsvfs == NULL || zfsvfs->z_vfs == NULL)
++			error = ENOENT;
++		else
++			error = vfs_busy_try(zfsvfs->z_vfs);
++		mutex_exit(&os->os_user_ptr_lock);
++		dmu_objset_rele(os, FTAG);
++		if (error != EBUSY)
++			break;
++		delay(1);
++	}
++	if (error != 0)
++		return (SET_ERROR(ESRCH));
++	*zfvp = zfsvfs;
++	return (0);
++}
++
+ static uint_t zfsdev_private_tsd;
+ 
+ dev_t
+@@ -219,12 +258,6 @@ out:
  #include <sys/ZFSDatasetScheme.h>
  
  
@@ -605,7 +683,7 @@ index 54978f8fa1..8285e69349 100644
  static const zfs_ioc_key_t zfs_keys_proxy_dataset[] = {
  	{ZPOOL_CONFIG_POOL_NAME,	DATA_TYPE_STRING,	0},
  };
-@@ -286,7 +281,7 @@ zfs_ioctl_init_os(void)
+@@ -286,7 +319,7 @@ zfs_ioctl_init_os(void)
  {
  	/* APPLE Specific ioctls */
  	zfs_ioctl_register("proxy_dataset", ZFS_IOC_PROXY_DATASET,
@@ -643,20 +721,130 @@ index 390a3b3359..2aca21cb0f 100644
  } // Extern "C"
  
 diff --git a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
-index 840b10fba4..19a73954e1 100644
+index 840b10fba4..962d5d208a 100644
 --- a/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
 +++ b/src/openzfs/module/os/macos/zfs/zfs_vfsops.c
-@@ -18,6 +18,9 @@
+@@ -18,6 +18,10 @@
   *
   * CDDL HEADER END
   */
 +/* Modified 2026-11-15 by The Blueberry Pie OS Authors: the root mount names its dataset as the mount's source (CDDL-1.0 section 3.3). */
 +/* Modified 2026-11-16 by The Blueberry Pie OS Authors: a remount holds the teardown lock, does not make a dataset writable while its readonly property is on, must name the dataset mounted, and keeps the mount's source (CDDL-1.0 section 3.3). */
 +/* Modified 2026-11-17 by The Blueberry Pie OS Authors: a remount holds the teardown lock as a reader, and the snapdir callback purges the name cache only when the value changes and the teardown lock is not held as a writer (CDDL-1.0 section 3.3). */
++/* Modified 2026-11-18 by The Blueberry Pie OS Authors: registering the property callbacks keeps the mount's own options in the flags it sets, and a temporary property is read under the objset's user pointer lock (CDDL-1.0 section 3.3). */
  /*
   * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
   * Copyright (c) 2011 Pawel Jakub Dawidek <pawel@dawidek.net>.
-@@ -381,8 +384,11 @@ static void
+@@ -140,12 +144,15 @@ zfs_get_temporary_prop(dsl_dataset_t *ds, zfs_prop_t zfs_prop, uint64_t *val,
+ 	error = dmu_objset_from_ds(ds, &os);
+ 	if (error != 0)
+ 		return (error);
++	if (dmu_objset_type(os) != DMU_OST_ZFS)
++		return (SET_ERROR(EINVAL));
+ 
+-	error = getzfsvfs_impl(os, &zfvp);
+-	if (error != 0)
+-		return (error);
+-	if (zfvp == NULL)
+-		return (ENOENT);
++	mutex_enter(&os->os_user_ptr_lock);
++	zfvp = dmu_objset_get_user(os);
++	if (zfvp == NULL || zfvp->z_vfs == NULL) {
++		mutex_exit(&os->os_user_ptr_lock);
++		return (SET_ERROR(ESRCH));
++	}
+ 	vfsp = zfvp->z_vfs;
+ 	switch (zfs_prop) {
+ 	case ZFS_PROP_ATIME:
+@@ -189,11 +196,11 @@ zfs_get_temporary_prop(dsl_dataset_t *ds, zfs_prop_t zfs_prop, uint64_t *val,
+ 		//	tmp = 1;
+ 		break;
+ 	default:
+-		vfs_unbusy(vfsp);
++		mutex_exit(&os->os_user_ptr_lock);
+ 		return (ENOENT);
+ 	}
+ 
+-	vfs_unbusy(vfsp);
++	mutex_exit(&os->os_user_ptr_lock);
+ 	if (tmp != *val) {
+ 		if (setpoint)
+ 			(void) strlcpy(setpoint, "temporary",
+@@ -280,11 +287,23 @@ zfs_vfs_sync(struct mount *vfsp, __unused int waitfor,
+ 	return (0);
+ }
+ 
++#define	ZFS_REGKEEP_RDONLY	0x01
++#define	ZFS_REGKEEP_NOSUID	0x02
++#define	ZFS_REGKEEP_NOEXEC	0x04
++#define	ZFS_REGKEEP_NODEV	0x08
++#define	ZFS_REGKEEP_NOXATTR	0x10
++#define	ZFS_REGKEEP_NOATIME	0x20
++#define	ZFS_REGKEEP_NOBROWSE	0x40
++#define	ZFS_REGKEEP_NOOWNERS	0x80
++
+ static void
+ atime_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
+ 
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_NOATIME)
++		newval = B_FALSE;
++
+ 	if (newval == B_TRUE) {
+ 		zfsvfs->z_atime = B_TRUE;
+ 		vfs_clearflags(zfsvfs->z_vfs, (uint64_t)MNT_NOATIME);
+@@ -299,6 +318,9 @@ xattr_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
+ 
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_NOXATTR)
++		newval = ZFS_XATTR_OFF;
++
+ 	/*
+ 	 * Apple does have MNT_NOUSERXATTR mount option, but unfortunately
+ 	 * the VFS layer returns EACCESS if xattr access is attempted.
+@@ -337,6 +359,9 @@ static void
+ readonly_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
++
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_RDONLY)
++		newval = B_TRUE;
+ 	if (newval == B_TRUE) {
+ 		vfs_setflags(zfsvfs->z_vfs, (uint64_t)MNT_RDONLY);
+ 	} else {
+@@ -348,6 +373,9 @@ static void
+ devices_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
++
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_NODEV)
++		newval = B_FALSE;
+ 	if (newval == B_FALSE) {
+ 		vfs_setflags(zfsvfs->z_vfs, (uint64_t)MNT_NODEV);
+ 	} else {
+@@ -359,6 +387,9 @@ static void
+ setuid_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
++
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_NOSUID)
++		newval = B_FALSE;
+ 	if (newval == B_FALSE) {
+ 		vfs_setflags(zfsvfs->z_vfs, (uint64_t)MNT_NOSUID);
+ 	} else {
+@@ -370,6 +401,9 @@ static void
+ exec_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
++
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_NOEXEC)
++		newval = B_FALSE;
+ 	if (newval == B_FALSE) {
+ 		vfs_setflags(zfsvfs->z_vfs, (uint64_t)MNT_NOEXEC);
+ 	} else {
+@@ -381,8 +415,11 @@ static void
  snapdir_changed_cb(void *arg, uint64_t newval)
  {
  	zfsvfs_t *zfsvfs = arg;
@@ -669,7 +857,141 @@ index 840b10fba4..19a73954e1 100644
  }
  
  static void
-@@ -1324,6 +1330,8 @@ zfs_vfs_mountroot(struct mount *mp, struct vnode *devvp, vfs_context_t ctx)
+@@ -404,6 +441,9 @@ static void
+ finderbrowse_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
++
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_NOBROWSE)
++		newval = B_FALSE;
+ 	if (newval == B_FALSE) {
+ 		vfs_setflags(zfsvfs->z_vfs, (uint64_t)MNT_DONTBROWSE);
+ 	} else {
+@@ -414,6 +454,9 @@ static void
+ ignoreowner_changed_cb(void *arg, uint64_t newval)
+ {
+ 	zfsvfs_t *zfsvfs = arg;
++
++	if (zfsvfs->z_regkeep & ZFS_REGKEEP_NOOWNERS)
++		newval = B_TRUE;
+ 	if (newval == B_FALSE) {
+ 		vfs_clearflags(zfsvfs->z_vfs, (uint64_t)MNT_IGNORE_OWNERSHIP);
+ 	} else {
+@@ -468,21 +511,13 @@ zfs_register_callbacks(struct mount *vfsp)
+ 
+ 	objset_t *os = NULL;
+ 	zfsvfs_t *zfsvfs = NULL;
+-	boolean_t readonly = B_FALSE;
+ 	boolean_t do_readonly = B_FALSE;
+-	boolean_t setuid = B_FALSE;
+ 	boolean_t do_setuid = B_FALSE;
+-	boolean_t exec = B_FALSE;
+ 	boolean_t do_exec = B_FALSE;
+-	boolean_t devices = B_FALSE;
+ 	boolean_t do_devices = B_FALSE;
+-	boolean_t xattr = B_FALSE;
+ 	boolean_t do_xattr = B_FALSE;
+-	boolean_t atime = B_FALSE;
+ 	boolean_t do_atime = B_FALSE;
+-	boolean_t finderbrowse = B_FALSE;
+ 	boolean_t do_finderbrowse = B_FALSE;
+-	boolean_t ignoreowner = B_FALSE;
+ 	boolean_t do_ignoreowner = B_FALSE;
+ 	int error = 0;
+ 
+@@ -501,41 +536,33 @@ zfs_register_callbacks(struct mount *vfsp)
+ 	/*
+ 	 * The act of registering our callbacks will destroy any mount
+ 	 * options we may have.  In order to enable temporary overrides
+-	 * of mount options, we stash away the current values and
+-	 * restore them after we register the callbacks.
++	 * of mount options, the callbacks keep the options noted in
++	 * z_regkeep while they are registered.
+ 	 */
+ 	if (vfs_optionisset(vfsp, MNT_RDONLY, NULL) ||
+ 	    !spa_writeable(dmu_objset_spa(os))) {
+-		readonly = B_TRUE;
+ 		do_readonly = B_TRUE;
+ 	}
+ 	if (vfs_optionisset(vfsp, MNT_NODEV, NULL)) {
+-		devices = B_FALSE;
+ 		do_devices = B_TRUE;
+ 	}
+ 	/* xnu SETUID, not IllumOS SUID */
+ 	if (vfs_optionisset(vfsp, MNT_NOSUID, NULL)) {
+-		setuid = B_FALSE;
+ 		do_setuid = B_TRUE;
+ 	}
+ 	if (vfs_optionisset(vfsp, MNT_NOEXEC, NULL)) {
+-		exec = B_FALSE;
+ 		do_exec = B_TRUE;
+ 	}
+ 	if (vfs_optionisset(vfsp, MNT_NOUSERXATTR, NULL)) {
+-		xattr = B_FALSE;
+ 		do_xattr = B_TRUE;
+ 	}
+ 	if (vfs_optionisset(vfsp, MNT_NOATIME, NULL)) {
+-		atime = B_FALSE;
+ 		do_atime = B_TRUE;
+ 	}
+ 	if (vfs_optionisset(vfsp, MNT_DONTBROWSE, NULL)) {
+-		finderbrowse = B_FALSE;
+ 		do_finderbrowse = B_TRUE;
+ 	}
+ 	if (vfs_optionisset(vfsp, MNT_IGNORE_OWNERSHIP, NULL)) {
+-		ignoreowner = B_TRUE;
+ 		do_ignoreowner = B_TRUE;
+ 	}
+ 
+@@ -556,6 +583,14 @@ zfs_register_callbacks(struct mount *vfsp)
+ 	 */
+ 	ds = dmu_objset_ds(os);
+ 	dsl_pool_config_enter(dmu_objset_pool(os), FTAG);
++	zfsvfs->z_regkeep = (do_readonly ? ZFS_REGKEEP_RDONLY : 0) |
++	    (do_setuid ? ZFS_REGKEEP_NOSUID : 0) |
++	    (do_exec ? ZFS_REGKEEP_NOEXEC : 0) |
++	    (do_devices ? ZFS_REGKEEP_NODEV : 0) |
++	    (do_xattr ? ZFS_REGKEEP_NOXATTR : 0) |
++	    (do_atime ? ZFS_REGKEEP_NOATIME : 0) |
++	    (do_finderbrowse ? ZFS_REGKEEP_NOBROWSE : 0) |
++	    (do_ignoreowner ? ZFS_REGKEEP_NOOWNERS : 0);
+ 	error = dsl_prop_register(ds,
+ 	    zfs_prop_to_name(ZFS_PROP_ATIME), atime_changed_cb, zfsvfs);
+ 	error = error ? error : dsl_prop_register(ds,
+@@ -590,31 +625,11 @@ zfs_register_callbacks(struct mount *vfsp)
+ 	error = error ? error : dsl_prop_register(ds,
+ 	    zfs_prop_to_name(ZFS_PROP_MIMIC), mimic_changed_cb, zfsvfs);
+ 
++	zfsvfs->z_regkeep = 0;
+ 	dsl_pool_config_exit(dmu_objset_pool(os), FTAG);
+ 	if (error)
+ 		goto unregister;
+ 
+-	/*
+-	 * Invoke our callbacks to restore temporary mount options.
+-	 */
+-	if (do_readonly)
+-		readonly_changed_cb(zfsvfs, readonly);
+-	if (do_setuid)
+-		setuid_changed_cb(zfsvfs, setuid);
+-	if (do_exec)
+-		exec_changed_cb(zfsvfs, exec);
+-	if (do_devices)
+-		devices_changed_cb(zfsvfs, devices);
+-	if (do_xattr)
+-		xattr_changed_cb(zfsvfs, xattr);
+-	if (do_atime)
+-		atime_changed_cb(zfsvfs, atime);
+-
+-	if (do_finderbrowse)
+-		finderbrowse_changed_cb(zfsvfs, finderbrowse);
+-	if (do_ignoreowner)
+-		ignoreowner_changed_cb(zfsvfs, ignoreowner);
+-
+ 	return (0);
+ 
+ unregister:
+@@ -1324,6 +1339,8 @@ zfs_vfs_mountroot(struct mount *mp, struct vnode *devvp, vfs_context_t ctx)
  	/* Set this mount to read-only */
  	zfsvfs->z_rdonly = 1;
  
@@ -678,7 +1000,7 @@ index 840b10fba4..19a73954e1 100644
  	/*
  	 * Due to XNU mount flags, readonly gets set off for a short
  	 * while, which means mimic will kick in if enabled. But we need
-@@ -1482,6 +1490,26 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
+@@ -1482,6 +1499,26 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
  		/* refresh mount options */
  		zfsvfs_t *zfsvfs = vfs_fsprivate(vfsp);
  
@@ -705,7 +1027,7 @@ index 840b10fba4..19a73954e1 100644
  		if (zfsvfs != NULL) {
  			if (zfsvfs->z_rdonly == 0 &&
  			    (cmdflags & MNT_RDONLY ||
-@@ -1499,6 +1527,17 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
+@@ -1499,6 +1536,17 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
  			}
  
  			if (vfs_iswriteupgrade(vfsp)) {
@@ -723,7 +1045,7 @@ index 840b10fba4..19a73954e1 100644
  				/* upgrade */
  				dprintf("%s: upgrade requested\n", __func__);
  				zfsvfs->z_rdonly = 0;
-@@ -1511,6 +1550,8 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
+@@ -1511,6 +1559,8 @@ zfs_vfs_mount(struct mount *vfsp, vnode_t *mvp /* devvp */,
  				}
  			}
  		}
@@ -732,7 +1054,7 @@ index 840b10fba4..19a73954e1 100644
  		goto out;
  	}
  
-@@ -1535,7 +1576,8 @@ out:
+@@ -1535,7 +1585,8 @@ out:
  		vfs_setextendedsecurity(vfsp);
  
  		// Set /dev/disk name if we have one, otherwise, datasetname
@@ -1151,6 +1473,43 @@ index fb6227a857..223ab4cb2a 100644
  	return (error);
  }
  
+diff --git a/src/openzfs/module/zfs/zfs_ioctl.c b/src/openzfs/module/zfs/zfs_ioctl.c
+index a4b31536d5..701f488a65 100644
+--- a/src/openzfs/module/zfs/zfs_ioctl.c
++++ b/src/openzfs/module/zfs/zfs_ioctl.c
+@@ -19,6 +19,7 @@
+  *
+  * CDDL HEADER END
+  */
++/* Modified 2026-11-18 by The Blueberry Pie OS Authors: getzfsvfs() does not wait for the mount while it holds the pool (CDDL-1.0 section 3.3). */
+ 
+ /*
+  * Copyright (c) 2005, 2010, Oracle and/or its affiliates. All rights reserved.
+@@ -1398,9 +1399,16 @@ getzfsvfs_impl(objset_t *os, zfsvfs_t **zfvp)
+ 	return (error);
+ }
+ 
++#ifdef __APPLE__
++extern int zfs_vfs_hold_byname(const char *, zfsvfs_t **);
++#endif
++
+ int
+ getzfsvfs(const char *dsname, zfsvfs_t **zfvp)
+ {
++#ifdef __APPLE__
++	return (zfs_vfs_hold_byname(dsname, zfvp));
++#else
+ 	objset_t *os;
+ 	int error;
+ 
+@@ -1411,6 +1419,7 @@ getzfsvfs(const char *dsname, zfsvfs_t **zfvp)
+ 	error = getzfsvfs_impl(os, zfvp);
+ 	dmu_objset_rele(os, FTAG);
+ 	return (error);
++#endif
+ }
+ 
+ /*
 diff --git a/src/openzfs/module/zfs/zfs_vnops.c b/src/openzfs/module/zfs/zfs_vnops.c
 index 8d11656383..e76e13d072 100644
 --- a/src/openzfs/module/zfs/zfs_vnops.c

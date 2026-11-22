@@ -7863,14 +7863,14 @@ Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
  2008 MacZFS
  2010 Sun Microsystems, Inc
  2005, 2008, 2010 Oracle and/or its affiliates
- 2011-2012, 2015-2016, 2018 Delphix
- 2012 Joyent, Inc
+ 2011-2012, 2015-2016, 2018, 2024 Delphix
+ 2012, 2014, 2016 Joyent, Inc
  2015 Chunwei Chen
  2016-2017 Nexenta Systems, Inc
  2011 Pawel Jakub Dawidek <pawel@dawidek.net>
- 2021, 2022 Pawel Jakub Dawidek
+ 2012, 2021, 2022 Pawel Jakub Dawidek
  2025 Rob Norris <robn@despairlabs.com>
- 2025 Klara, Inc
+ 2019, 2021, 2023-2025 Klara, Inc
  2007 Jeremy Teo
  2010 Robert Milkowski
  2017, 2021, 2023 Sean Doran <smd@use.net>
@@ -7884,6 +7884,20 @@ Copyright: 2013, 2020 Jorgen Lundman <lundman@lundman.net>
  2022 Tino Reichardt
  2024 Shengqi Chen
  2025-2026 Joergen Lundman
+ 2011 Martin Matuska
+ 2015 OmniTI Computer Consulting, Inc
+ 2013 Saso Kiselkov
+ 2013 Steven Hartland
+ 2014 Integros [integros.com]
+ 2016 Toomas Soome <tsoome@me.com>
+ 2016 Actifio, Inc
+ 2018 loli10K <ezomori.nozomu@gmail.com>
+ 2017 RackTop Systems
+ 2017 Open-E, Inc
+ 2019 Datto Inc
+ 2019-2020 Christian Schwarz
+ 2019 Allan Jude
+ 2024 Oxide Computer Company
  2026 The Blueberry Pie OS Authors
 License: CDDL-1.0
 
@@ -7911,6 +7925,14 @@ Copyright: 2000-2021 Apple Inc.
  1987-1991 Carnegie Mellon University
  2026 The Blueberry Pie OS Authors
 License: LicenseRef-APSL-2.0-OS-reference AND CMU-Mach
+
+Files: patches/0009-vfs-busy-try.patch
+Copyright: 2000-2024 Apple Inc.
+ 1995 NeXT Computer, Inc.
+ 1989, 1991, 1993 The Regents of the University of California
+ UNIX System Laboratories, Inc.
+ 2026 The Blueberry Pie OS Authors
+License: LicenseRef-APSL-2.0-OS-reference AND BSD-4-Clause-UC
 
 Files: patches/0010-rockchip-rk3566-support.patch
 Copyright: 1993-2026 Apple Inc.

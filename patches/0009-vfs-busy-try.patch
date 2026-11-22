@@ -1,0 +1,69 @@
+Description: vfs_busy_try() makes a mount busy without waiting
+ vfs_busy() with LK_NOWAIT returns at once for a mount that is being
+ unmounted, but waits for the mount's lock while an update holds it. ZFS
+ makes a mount busy while it holds locks that a remount waits for, so it
+ needs a form that never waits. vfs_busy_try() returns EBUSY when the
+ lock is held exclusively and ENOENT when the mount is being unmounted.
+Author: The Blueberry Pie OS Authors
+Forwarded: no
+Last-Update: 2026-11-18
+
+--- a/xnu/bsd/sys/mount_internal.h
++++ b/xnu/bsd/sys/mount_internal.h
+@@ -25,6 +25,7 @@
+  *
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
++/* Modified 2026-11-18: declares vfs_busy_try() (APSL 2.0 section 2.2(b)). */
+ /* Copyright (c) 1995 NeXT Computer, Inc. All Rights Reserved */
+ /*
+  * Copyright (c) 1989, 1991, 1993
+@@ -436,6 +437,7 @@
+ void mount_unlock_renames(mount_t);
+ void mount_ref(mount_t, int);
+ void mount_drop(mount_t, int);
++int vfs_busy_try(mount_t);
+ int  mount_refdrain(mount_t);
+ 
+ /* vfs_rootmountalloc should be kept as a private api */
+--- a/xnu/bsd/vfs/vfs_subr.c
++++ b/xnu/bsd/vfs/vfs_subr.c
+@@ -26,6 +26,7 @@
+  *
+  * @APPLE_OSREFERENCE_LICENSE_HEADER_END@
+  */
++/* Modified 2026-11-18: vfs_busy_try() makes a mount busy only if it can do so without waiting (APSL 2.0 section 2.2(b)). */
+ /* Copyright (c) 1995 NeXT Computer, Inc. All Rights Reserved */
+ /*
+  * Copyright (c) 1989, 1993
+@@ -1074,6 +1075,30 @@
+ 	}
+ 	return 0;
+ }
++
++int
++vfs_busy_try(mount_t mp)
++{
++	if (mp->mnt_lflag & MNT_LDEAD) {
++		return ENOENT;
++	}
++
++	mount_lock(mp);
++	if (mp->mnt_lflag & MNT_LUNMOUNT) {
++		mount_unlock(mp);
++		return ENOENT;
++	}
++	mount_unlock(mp);
++
++	if (!lck_rw_try_lock_shared(&mp->mnt_rwlock)) {
++		return EBUSY;
++	}
++	if (mp->mnt_lflag & (MNT_LDEAD | MNT_LUNMOUNT)) {
++		lck_rw_done(&mp->mnt_rwlock);
++		return ENOENT;
++	}
++	return 0;
++}
+ 
+ /*
+  * Free a busy filesystem.
