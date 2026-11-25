@@ -12,8 +12,11 @@
 #include <libkern/OSByteOrder.h>
 #include <mach/mach_time.h>
 #include <sys/errno.h>
+#include <sys/proc.h>
+#include <sys/signal.h>
 #include <sys/sysctl.h>
 
+#include "../rpi/RPiPlatform.h"
 #include "RKI2C.h"
 #include "RKSoC.h"
 
@@ -21,7 +24,8 @@
 enum {
 	GG_ADC_CONFIG0 = 0x50, GG_Q_PRES = 0x74, GG_CAL_OFFSET = 0x91, GG_VOL_ADC_B = 0xa9,
 	PMIC_POWER_EN3 = 0xb4, PMIC_CHRG_OUT = 0xe4, PMIC_CHRG_IN = 0xe5, PMIC_CHRG_STS = 0xeb, PMIC_CHIP_NAME = 0xed,
-	PMIC_SYS_STS = 0xf0,
+	PMIC_SYS_STS = 0xf0, PMIC_SYS_CFG3 = 0xf4,
+	SYS_CFG3_KEEP = 0xf8, SYS_CFG3_DEV_OFF = 1U << 0,
 	CHRG_IN_USB_ILIM = 0x0f, CHRG_IN_USB_ILIM_1500MA = 0x0b,
 	CHIP_NAME_HIGH = 0x81, CHIP_NAME_LOW = 0x7,
 	ADC_CONFIG0_GG_EN = 1U << 7, ADC_CONFIG0_BAT_VOL = 1U << 3, ADC_CONFIG0_BAT_CUR = 1U << 2,
@@ -48,7 +52,8 @@ enum {
  * read for 50 ms. It is turned on while the charger has no USB power, as a
  * check reads, from the boot volume on or a minute after start, and never
  * once stop has begun. It is turned off as at stop when the system halts
- * or restarts. hw.battery.boost shows its state as it reads back.
+ * or restarts, and at a halt the board is then switched off, as powerOff
+ * says. hw.battery.boost shows its state as it reads back.
  */
 static int sBoost = -1;
 
@@ -62,6 +67,8 @@ static const struct RK817Switch {
 
 #define SWITCHES        (sizeof(rk817Switches) / sizeof(rk817Switches[0]))
 enum { FOLLOW_MS = 50, FOLLOW_TRIES = 3, BLIND_MS = 50, UNFOLLOW_MS = 2000, LDO_SLOT_MS = 250 };
+enum { OFF_SETTLE_MS = 300, OFF_TRY_MS = 1000, OFF_RETRY_MS = 15, OFF_CHECK_MS = 100 };
+enum { GUARD_GRACE_MS = 120000, GUARD_POLLS = 6, GUARD_AGAIN_MS = 300000, GAUGE_AGE_MS = 40000, HALT_PERCENT_MAX = 50 };
 enum { REFUSED_BOOST = 1, REFUSED_UNREAD = 2 };
 enum { SLOT_NONE, SLOT_OFF, SLOT_BOOST };
 #define OCV_POINTS      32
@@ -174,7 +181,8 @@ class RK817 : public RKRegulators
 	const char *ending;
 	unsigned threads;
 	IONotifier *haltNotifier;
-	uint32_t following, failing;
+	bool powerOffSet;
+	uint32_t following, followed, failing;
 	uint64_t blindUntil;
 	int lastUsb;
 	uint64_t ldoSlotNext;
@@ -184,6 +192,8 @@ class RK817 : public RKRegulators
 	uint32_t ocvPoints, ocvMicroVolt[OCV_POINTS], ocvPercent[OCV_POINTS];
 	int smoothedCharge, smoothedCurrent;
 	bool currentSeeded, gaugeLogged;
+	uint64_t gaugeUntil, guardFrom, guardAgain;
+	unsigned guardLow;
 	uint8_t ldoVsel[LDOS];
 	uint16_t ldoOn, ldoKnown;
 	uint8_t ldoRefused[LDOS];
@@ -212,12 +222,15 @@ class RK817 : public RKRegulators
 	static void follow(void *arg, wait_result_t wr);
 	static IOReturn haltRestart(void *target, void *refCon, UInt32 messageType, IOService *provider, void *argument,
 	    vm_size_t size);
+	bool powerOff(void);
+	static bool powerOffHandler(void *arg);
 
 	void setInputLimit(void);
 	bool batteryFound(IOService *provider);
 	int ocvCharge(int millivolt);
 	void batteryStart(void);
-	void batteryPoll(bool gauge);
+	bool batteryPoll(bool gauge);
+	void guard(bool polled);
 	static void batteryThread(void *arg, wait_result_t wr);
 
 public:
@@ -560,6 +573,8 @@ enum {
 static IOLock *sBatteryLock;
 static int sBattery[BAT_VALUES];
 static int sVref0 = 2250, sVref1 = 4050, sCurrentStep = 1736, sCurrentSign = 1;
+/* On battery, the system halts once the charge stays at or below this, as guard says; 0: never. */
+static int sHaltPercent = 5;
 
 static int
 sysctl_boost SYSCTL_HANDLER_ARGS
@@ -582,7 +597,7 @@ sysctl_battery SYSCTL_HANDLER_ARGS
 	return sysctl_io_number(req, value, sizeof(value), NULL, NULL);
 }
 
-enum { SCALE_MILLIVOLT, SCALE_NANOVOLT, SCALE_SIGN };
+enum { SCALE_MILLIVOLT, SCALE_NANOVOLT, SCALE_SIGN, LIMIT_PERCENT };
 
 static int
 sysctl_battery_scale SYSCTL_HANDLER_ARGS
@@ -601,7 +616,8 @@ sysctl_battery_scale SYSCTL_HANDLER_ARGS
 		return err;
 	}
 	bool ok = arg2 == SCALE_MILLIVOLT ? value >= 0 && value <= 6000 : arg2 == SCALE_NANOVOLT ?
-	    value >= 1 && value <= 100000 : value == 1 || value == -1;
+	    value >= 1 && value <= 100000 : arg2 == LIMIT_PERCENT ? value >= 0 && value <= HALT_PERCENT_MAX :
+	    value == 1 || value == -1;
 	if (!ok) {
 		return EINVAL;
 	}
@@ -642,6 +658,7 @@ BAT_SCALE(scale_vref0_mv, sVref0, SCALE_MILLIVOLT, "mV that VCALIB0 stands for, 
 BAT_SCALE(scale_vref1_mv, sVref1, SCALE_MILLIVOLT, "mV that VCALIB1 stands for");
 BAT_SCALE(scale_current_nv, sCurrentStep, SCALE_NANOVOLT, "nV across the sense resistor per BAT_CUR step");
 BAT_SCALE(scale_current_sign, sCurrentSign, SCALE_SIGN, "1: a positive BAT_CUR charges the battery; -1: it discharges it");
+BAT_SCALE(halt_percent, sHaltPercent, LIMIT_PERCENT, "on battery, the system halts once six polls in a row, 25 s, see a charge at or below this, from 2 minutes after start; 0-50; 0: never");
 
 static struct sysctl_oid *const sBatteryOIDs[] = {
 	&sysctl__hw_battery, &sysctl__hw_battery_percent, &sysctl__hw_battery_charging, &sysctl__hw_battery_external,
@@ -651,7 +668,7 @@ static struct sysctl_oid *const sBatteryOIDs[] = {
 	&sysctl__hw_battery_raw_current, &sysctl__hw_battery_raw_charge, &sysctl__hw_battery_vcalib0,
 	&sysctl__hw_battery_vcalib1, &sysctl__hw_battery_ioffset, &sysctl__hw_battery_cal_offset, &sysctl__hw_battery_boost,
 	&sysctl__hw_battery_scale_vref0_mv, &sysctl__hw_battery_scale_vref1_mv,
-	&sysctl__hw_battery_scale_current_nv, &sysctl__hw_battery_scale_current_sign,
+	&sysctl__hw_battery_scale_current_nv, &sysctl__hw_battery_scale_current_sign, &sysctl__hw_battery_halt_percent,
 };
 
 static bool
@@ -728,12 +745,25 @@ RK817::ocvCharge(int millivolt)
 	return -1;
 }
 
-void
+/*
+ * One poll of the charger's state, and of the gauge with gauge; false if
+ * the state does not read. A gauge reading that gives a charge keeps it
+ * fresh for the guard for GAUGE_AGE_MS. A poll with gauge leaves it stale
+ * until it gives one, so a gauge that fails or reads out of range leaves
+ * the guard nothing to count. A reading that gives a charge after the
+ * charge went stale replaces the smoothed charge, as the first reading
+ * does, so a charge from before a gap does not linger in it.
+ */
+bool
 RK817::batteryPoll(bool gauge)
 {
 	uint8_t chrg, sys;
+	bool stale = gaugeUntil == 0 || mach_absolute_time() >= gaugeUntil;
+	if (gauge) {
+		gaugeUntil = 0;
+	}
 	if (read(PMIC_CHRG_STS, &chrg) != kIOReturnSuccess || read(PMIC_SYS_STS, &sys) != kIOReturnSuccess) {
-		return;
+		return false;
 	}
 	int state = (chrg >> 4) & 7;
 	bool external = (sys & SYS_STS_PLUG_IN) || (chrg & CHRG_STS_USB_EXISTS);
@@ -776,7 +806,8 @@ RK817::batteryPoll(bool gauge)
 
 		int charge = full ? 10000 : sane ? ocvCharge(mv - (int)((int64_t)ma * resistanceMicroOhm / 1000000)) : -1;
 		if (charge >= 0) {
-			smoothedCharge = smoothedCharge < 0 ? charge : (smoothedCharge * 3 + charge) / 4;
+			smoothedCharge = smoothedCharge < 0 || stale ? charge : (smoothedCharge * 3 + charge) / 4;
+			clock_interval_to_deadline(GAUGE_AGE_MS, kMillisecondScale, &gaugeUntil);
 		}
 		if (v[BAT_GAUGE]) {
 			smoothedCurrent = currentSeeded ? (smoothedCurrent * 3 + ma) / 4 : ma;
@@ -821,6 +852,39 @@ RK817::batteryPoll(bool gauge)
 		v[BAT_PERCENT], v[BAT_VOLTAGE], v[BAT_CURRENT], v[BAT_REMAINING],
 	};
 	battery->report(&r);
+	return true;
+}
+
+/*
+ * On battery, the system halts once the charge stays low: from 2 minutes
+ * after start, six polls in a row, 25 s, that read the charger without USB
+ * power and a charge of at most hw.battery.halt_percent that the gauge gave
+ * within GAUGE_AGE_MS. The gauge is read every 30 s. init is then sent
+ * SIGUSR2 and halts as halt(8) asks it to: its shutdown script, every
+ * process told to quit, a sync, then the halt, which switches the board
+ * off. While the count still holds GUARD_AGAIN_MS after a signal, another
+ * is sent: init drops one that comes during a soft reboot, and its own
+ * halt takes far less. A poll that does not read, USB power, a charge not
+ * known, stale or above the limit, and a limit of 0 start the count again.
+ */
+void
+RK817::guard(bool polled)
+{
+	IOLockLock(sBatteryLock);
+	int percent = sBattery[BAT_PERCENT], external = sBattery[BAT_EXTERNAL], millivolt = sBattery[BAT_VOLTAGE];
+	int limit = sHaltPercent;
+	IOLockUnlock(sBatteryLock);
+	uint64_t now = mach_absolute_time();
+	bool fresh = gaugeUntil != 0 && now < gaugeUntil;
+	bool low = polled && fresh && external == 0 && percent >= 0 && limit > 0 && percent <= limit && now >= guardFrom;
+	guardLow = low ? guardLow + 1 : 0;
+	if (guardLow < GUARD_POLLS || (guardAgain != 0 && now < guardAgain)) {
+		return;
+	}
+	clock_interval_to_deadline(GUARD_AGAIN_MS, kMillisecondScale, &guardAgain);
+	IOLog("RK817: the battery is at %d%%, %d mV, at most %d%% for six polls, 25 s, on battery: halting\n",
+	    percent, millivolt, limit);
+	proc_signal(1, SIGUSR2);
 }
 
 void
@@ -852,7 +916,8 @@ RK817::batteryStart(void)
 
 /*
  * After the boot volume, waited for in steps of a second: the charger's
- * state every 5 s, the gauge every 30 s, until stop.
+ * state every 5 s, the gauge every 30 s, until stop, a halt or a restart,
+ * each poll followed by the low-battery guard.
  */
 void
 RK817::batteryThread(void *arg, wait_result_t wr)
@@ -867,7 +932,7 @@ RK817::batteryThread(void *arg, wait_result_t wr)
 		me->batteryStart();
 	}
 	for (uint32_t n = 1; me->battery != NULL && me->pause(5000); n++) {
-		me->batteryPoll(n % 6 == 0);
+		me->guard(me->batteryPoll(n % 6 == 0));
 	}
 	me->threadDone();
 }
@@ -1166,6 +1231,7 @@ RK817::start(IOService *provider)
 		return false;
 	}
 	lastUsb = -1;
+	clock_interval_to_deadline(GUARD_GRACE_MS, kMillisecondScale, &guardFrom);
 	bus = OSDynamicCast(RKI2C, provider->getProvider());
 	OSData *reg = OSDynamicCast(OSData, provider->getProperty("pieboot,bus-reg"));
 	uint64_t a = reg != NULL && reg->getLength() >= 16 ? *(const uint64_t *)reg->getBytesNoCopy() : ~0ULL;
@@ -1213,6 +1279,7 @@ RK817::start(IOService *provider)
 			continue;
 		}
 		following |= 1U << i;
+		followed |= 1U << i;
 		*sw->state = switchState(sw);
 		if (*sw->state < 0) {
 			IOLog("RK817: %s: cannot read its state\n", sw->node);
@@ -1226,30 +1293,47 @@ RK817::start(IOService *provider)
 	OSSafeReleaseNULL(regulators);
 
 	/*
-	 * The LDOs' registers are read while the switches read off, or once the
-	 * check above has read the charger's status without USB power: USB
-	 * power that comes after that check meets fewer of start's transfers,
-	 * these two included, than its bound for BOOST counts.
+	 * The LDOs' registers, and SYS_CFG3, ON_SOURCE and OFF_SOURCE, are read
+	 * while the switches read off, or once the check above has read the
+	 * charger's status without USB power: USB power that comes after that
+	 * check meets fewer of start's transfers, these three included, than
+	 * its bound for BOOST counts. ON_SOURCE and OFF_SOURCE say what last
+	 * switched the PMIC on and off: OFF_SOURCE bit 3 is DEV_OFF.
 	 */
 	IOLockLock(lock);
 	bool tried = switchesOff() || usb == 0;
+	uint8_t sources[3];
+	bool sourced = false;
 	if (tried) {
 		readLDOs();
+		sourced = bus->readRegisters(address, PMIC_SYS_CFG3, sources, sizeof(sources)) == kIOReturnSuccess;
 	}
 	IOLockUnlock(lock);
 	logLDOs(tried);
+	if (sourced) {
+		IOLog("RK817: SYS_CFG3 0x%02x, ON_SOURCE 0x%02x, OFF_SOURCE 0x%02x\n", sources[0], sources[1], sources[2]);
+	} else {
+		IOLog("RK817: SYS_CFG3, ON_SOURCE and OFF_SOURCE %s\n",
+		    tried ? "cannot be read" : "are not read while BOOST may be on");
+	}
 
 	if (following != 0 && !startThread(&RK817::follow)) {
 		IOLog("RK817: no thread to follow the charger's USB power\n");
 		unfollow(": nothing follows the charger's USB power");
 	}
-	if (following != 0) {
+	bool found = batteryFound(provider);
+	if (following != 0 || found) {
 		haltNotifier = registerPrioritySleepWakeInterest(&RK817::haltRestart, this);
 		if (haltNotifier == NULL) {
-			IOLog("RK817: no notice of halt or restart; BOOST may stay on through them\n");
+			IOLog("RK817: no notice of halt or restart; its threads run on through them%s\n",
+			    following != 0 ? ", and BOOST may stay on" : "");
 		}
 	}
-	if (!batteryFound(provider)) {
+	powerOffSet = rpi_set_power_off(&RK817::powerOffHandler, this);
+	if (!powerOffSet) {
+		IOLog("RK817: the platform takes no power-off; a halt leaves the board on\n");
+	}
+	if (!found) {
 		IOLog("RK817: no charger or battery in the device tree\n");
 	} else if (!startThread(&RK817::batteryThread)) {
 		IOLog("RK817: no thread for the battery\n");
@@ -1282,7 +1366,8 @@ RK817::endThreads(const char *why)
 /*
  * At halt and restart the threads end as at stop, so that BOOST is off
  * before the system goes: nothing turns it off in the firmware, or before
- * the next kernel's RK817 starts.
+ * the next kernel's RK817 starts. A restart then cannot cut a battery
+ * poll's transfer either. The notice is taken whenever a thread runs.
  */
 IOReturn
 RK817::haltRestart(void *target, void *refCon, UInt32 messageType, IOService *provider, void *argument,
@@ -1300,9 +1385,85 @@ RK817::haltRestart(void *target, void *refCon, UInt32 messageType, IOService *pr
 	return kIOReturnSuccess;
 }
 
+/*
+ * At a halt, last, from the platform expert: the board switched off with
+ * the PMIC's DEV_OFF, once every driver has had its shutdown notices and
+ * the power tree is quiet. The threads end first, as at the halt notice,
+ * which has ended them already unless it was not sent. Under lock, each
+ * switch that followed the charger's USB power is read back off, and
+ * 300 ms pass for BOOST's 5 V on the socket to fall: the RK817 may start
+ * again at DEV_OFF while it sees that 5 V, as it does with USB power.
+ * Then SYS_CFG3 is read and written back with DEV_OFF set: RST_FUN,
+ * SLP_POL and SLP_FUN as read, the DEV_RST and DEV_SLP commands 0. Nothing
+ * is written without a read in the same try. The power goes within 100 ms
+ * of a write that takes. Tries go on for 1 s, 15 ms after a transfer that
+ * failed and 100 ms after a write. False, logged, if the board is still on
+ * after them: the halt then goes on as it would without this.
+ */
+bool
+RK817::powerOff(void)
+{
+	endThreads(": the system is halting");
+	IOLockLock(lock);
+	for (unsigned i = 0; i < SWITCHES; i++) {
+		const struct RK817Switch *sw = &rk817Switches[i];
+		if ((followed & (1U << i)) && turnOff(sw, ": the system is halting") != 0) {
+			IOLog("RK817: %s does not read off; the RK817 may start again\n", sw->node);
+		}
+	}
+	IOSleep(OFF_SETTLE_MS);
+	if (usbPower(~0ULL) == 1) {
+		IOLog("RK817: the charger has USB power; the RK817 may start again, into the loader's charge mode\n");
+	}
+	uint64_t deadline;
+	clock_interval_to_deadline(OFF_TRY_MS, kMillisecondScale, &deadline);
+	IOReturn ret = kIOReturnError;
+	unsigned tries = 0, writes = 0;
+	bool readOnce = false;
+	do {
+		uint8_t cfg, v;
+		tries++;
+		if ((ret = read(PMIC_SYS_CFG3, &cfg)) != kIOReturnSuccess) {
+			IOSleep(OFF_RETRY_MS);
+			continue;
+		}
+		v = (uint8_t)((cfg & SYS_CFG3_KEEP) | SYS_CFG3_DEV_OFF);
+		if (!readOnce) {
+			IOLog("RK817: switching the board off: SYS_CFG3 reads 0x%02x, writing 0x%02x\n", cfg, v);
+			readOnce = true;
+		}
+		if ((ret = bus->writeRegisters(address, PMIC_SYS_CFG3, &v, 1)) != kIOReturnSuccess) {
+			IOSleep(OFF_RETRY_MS);
+			continue;
+		}
+		IOSleep(OFF_CHECK_MS);
+		if (writes++ == 0) {
+			IOLog("RK817: DEV_OFF written as 0x%02x, but the board is still on\n", v);
+		}
+	} while (mach_absolute_time() < deadline);
+	IOLockUnlock(lock);
+	if (!readOnce) {
+		IOLog("RK817: SYS_CFG3 does not read: 0x%x; DEV_OFF not written\n", ret);
+	} else if (writes == 0) {
+		IOLog("RK817: DEV_OFF not written: 0x%x\n", ret);
+	}
+	IOLog("RK817: THE BOARD DID NOT POWER OFF in 1 s, %u tries; the halt timer or the watchdog restarts it\n", tries);
+	return false;
+}
+
+bool
+RK817::powerOffHandler(void *arg)
+{
+	return ((RK817 *)arg)->powerOff();
+}
+
 void
 RK817::stop(IOService *provider)
 {
+	if (powerOffSet) {
+		rpi_set_power_off(NULL, NULL);
+		powerOffSet = false;
+	}
 	if (haltNotifier != NULL) {
 		haltNotifier->remove();
 		haltNotifier = NULL;

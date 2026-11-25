@@ -6,6 +6,11 @@
 #include <IOKit/IOKitKeys.h>
 #include <IOKit/IOLib.h>
 #include <IOKit/IOMemoryDescriptor.h>
+#include <IOKit/IOMessage.h>
+#include <IOKit/pwr_mgt/RootDomain.h>
+#include <kern/clock.h>
+#include <mach/mach_time.h>
+#include <os/atomic_private.h>
 #include <pexpert/pexpert.h>
 
 #include "PIESDCard.h"
@@ -137,7 +142,7 @@ PIESDCard::sdInitCard(void)
 bool
 PIESDCard::sdReadReference(uint8_t *reference)
 {
-	if (sdBlocks < kSDCheckBlocks || sdTransferBlocks(0, kSDCheckBlocks, false) != kIOReturnSuccess) {
+	if (sdStopping() || sdBlocks < kSDCheckBlocks || sdTransferBlocks(0, kSDCheckBlocks, false) != kIOReturnSuccess) {
 		return false;
 	}
 	bcopy(sdBounce, reference, kSDCheckBlocks * kSDBlockSize);
@@ -147,16 +152,26 @@ PIESDCard::sdReadReference(uint8_t *reference)
 bool
 PIESDCard::sdSameAs(const uint8_t *reference, const char *what)
 {
+	if (sdStopping()) {
+		return false;
+	}
 	memset(sdBounce, 0xA5, kSDCheckBlocks * kSDBlockSize);
 	IOReturn ret = sdTransferBlocks(0, kSDCheckBlocks, false);
 	if (ret == kIOReturnSuccess && memcmp(sdBounce, reference, kSDCheckBlocks * kSDBlockSize) == 0) {
 		return true;
 	}
-	IOLog("%s: %s reads the card %s; left out\n", getName(), what, ret == kIOReturnSuccess ? "wrongly" : "with errors");
+	if (!sdStopping()) {
+		IOLog("%s: %s reads the card %s; left out\n", getName(), what,
+		    ret == kIOReturnSuccess ? "wrongly" : "with errors");
+	}
 	return false;
 }
 
-/* CMD6 to high speed, kept only if the card then reads as it did. */
+/*
+ * CMD6 to high speed, kept only if the card then reads as it did. Once the
+ * stop is set, no further step reaches the card or changes the host's clock
+ * or timing, nothing more is logged, and the host's setup ends.
+ */
 void
 PIESDCard::sdSetUpHighSpeed(const uint8_t *reference, const char *bootArg)
 {
@@ -165,19 +180,29 @@ PIESDCard::sdSetUpHighSpeed(const uint8_t *reference, const char *bootArg)
 		return;
 	}
 	uint8_t status[64];
-	if (sdReadSmall(6, 0x00FFFFF1, status, sizeof(status)) != kIOReturnSuccess || !(status[13] & 0x02)) {
+	if (sdStopping() || sdReadSmall(6, 0x00FFFFF1, status, sizeof(status)) != kIOReturnSuccess ||
+	    !(status[13] & 0x02) || sdStopping()) {
 		return;
 	}
 	if (sdReadSmall(6, 0x80FFFFF1, status, sizeof(status)) != kIOReturnSuccess || (status[16] & 0xF) != 1) {
-		IOLog("%s: the card did not switch to high speed\n", getName());
+		if (!sdStopping()) {
+			IOLog("%s: the card did not switch to high speed\n", getName());
+		}
 		return;
 	}
-	if (sdHighSpeedTiming(true) && sdSetClock(kSDClockHighSpeedHz) && sdSameAs(reference, "high speed")) {
+	bool fast = !sdStopping() && sdHighSpeedTiming(true) && !sdStopping() && sdSetClock(kSDClockHighSpeedHz) &&
+	    sdSameAs(reference, "high speed");
+	if (fast || sdStopping()) {
 		return;
 	}
 	sdSetClock(kSDClockRunHz);
+	if (sdStopping()) {
+		return;
+	}
 	sdHighSpeedTiming(false);
-	sdReadSmall(6, 0x80FFFFF0, status, sizeof(status));
+	if (!sdStopping()) {
+		sdReadSmall(6, 0x80FFFFF0, status, sizeof(status));
+	}
 }
 
 bool
@@ -190,7 +215,7 @@ PIESDCard::sdStart(void)
 		return false;
 	}
 	IOLockLock(sdLock);
-	sdPresent = sdInitCard();
+	sdPresent = !sdStopping() && sdInitCard() && !sdStopping();
 	IOLockUnlock(sdLock);
 	if (sdPresent) {
 		IOLog("%s: %s %s rev %s, %llu blocks (%llu MB)%s\n", getName(), sdVendor, sdProduct, sdRevision,
@@ -215,12 +240,96 @@ PIESDCard::sdPublish(const char *location)
 	}
 	setProperty(kIOMaximumBlockCountReadKey, kSDMaxBlocks, 64);
 	setProperty(kIOMaximumBlockCountWriteKey, kSDMaxBlocks, 64);
+	if (sdHaltNotifier == NULL) {
+		sdHaltNotifier = registerPrioritySleepWakeInterest(&PIESDCard::sdHaltRestart, this);
+		if (sdHaltNotifier == NULL) {
+			IOLog("%s: no notice of halt or restart; I/O goes on through them\n", getName());
+		}
+	}
 	registerService();
+}
+
+/*
+ * Every card's stop: set at the first halt or restart notice, with the one
+ * deadline that every card's transfer under way is waited for against.
+ */
+static bool sSDStopping;
+static uint64_t sSDStopDeadline;
+
+bool
+PIESDCard::sdStopping(void)
+{
+	return os_atomic_load(&sSDStopping, relaxed);
+}
+
+/*
+ * A card's setup steps that reach the card check the stop under sdLock
+ * first; a transfer's own recovery does not. Before it publishes the card,
+ * and where a step fails, the setup asks this: true once the stop is set,
+ * and the card is then not published. The first such call logs it.
+ */
+bool
+PIESDCard::sdSetupStopped(void)
+{
+	if (!sdStopping()) {
+		return false;
+	}
+	if (!os_atomic_xchg(&sdSetupHalted, true, relaxed)) {
+		IOLog("%s: not set up: the system is halting or restarting\n", getName());
+	}
+	return true;
+}
+
+/*
+ * No new I/O on any card: the first notice sets the deadline and the stop,
+ * which a transfer under way sees between its chunks, and every later
+ * request at once. Then this card's transfer under way, which holds sdLock,
+ * is waited for until the deadline, once per card.
+ */
+void
+PIESDCard::sdStop(const char *why)
+{
+	uint64_t deadline;
+	clock_interval_to_deadline(kSDStopWaitMs, kMillisecondScale, &deadline);
+	os_atomic_cmpxchg(&sSDStopDeadline, 0, deadline, relaxed);
+	os_atomic_store(&sSDStopping, true, relaxed);
+	if (os_atomic_xchg(&sdStopDone, true, relaxed)) {
+		return;
+	}
+	deadline = os_atomic_load(&sSDStopDeadline, relaxed);
+	bool idle;
+	while (!(idle = IOLockTryLock(sdLock)) && mach_absolute_time() < deadline) {
+		IOSleep(10);
+	}
+	if (idle) {
+		IOLockUnlock(sdLock);
+	}
+	IOLog("%s: no more I/O%s%s\n", getName(), why, idle ? "" : "; a transfer still runs at the 8 s deadline");
+}
+
+IOReturn
+PIESDCard::sdHaltRestart(void *target, void *refCon, UInt32 messageType, IOService *provider, void *argument,
+    vm_size_t size)
+{
+	(void)refCon;
+	(void)provider;
+	(void)argument;
+	(void)size;
+	if (messageType == kIOMessageSystemWillPowerOff) {
+		((PIESDCard *)target)->sdStop(": the system is halting");
+	} else if (messageType == kIOMessageSystemWillRestart) {
+		((PIESDCard *)target)->sdStop(": the system is restarting");
+	}
+	return kIOReturnSuccess;
 }
 
 void
 PIESDCard::free(void)
 {
+	if (sdHaltNotifier != NULL) {
+		sdHaltNotifier->remove();
+		sdHaltNotifier = NULL;
+	}
 	if (sdLock != NULL) {
 		IOLockFree(sdLock);
 	}
@@ -244,6 +353,10 @@ PIESDCard::doAsyncReadWrite(IOMemoryDescriptor *buffer, UInt64 block, UInt64 nbl
 	}
 	IOLockLock(sdLock);
 	for (UInt64 done = 0; ret == kIOReturnSuccess && done < nblks;) {
+		if (sdStopping()) {
+			ret = kIOReturnOffline;
+			break;
+		}
 		uint32_t n = (uint32_t)(nblks - done < kSDMaxBlocks ? nblks - done : kSDMaxBlocks);
 		IOByteCount offset = done * kSDBlockSize, length = (IOByteCount)n * kSDBlockSize;
 		if (write) {

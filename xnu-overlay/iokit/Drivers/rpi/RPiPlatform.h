@@ -168,4 +168,13 @@ void rpi_watchdog_early_start(IOService *nub);
 void rpi_watchdog_halt(void);
 void rpi_watchdog_panic(void);
 
+/*
+ * The board's power-off at a halt: the platform expert calls fn(arg) last,
+ * after rpi_watchdog_halt and before PSCI SYSTEM_OFF, and never once a
+ * panic has begun. fn returns only while the board is still on. A NULL fn
+ * unregisters, and waits for a call in progress. False before the
+ * platform expert has started.
+ */
+bool rpi_set_power_off(bool (*fn)(void *arg), void *arg);
+
 #endif

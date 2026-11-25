@@ -6,6 +6,7 @@
 #include <IOKit/IOBufferMemoryDescriptor.h>
 #include <IOKit/IODeviceTreeSupport.h>
 #include <IOKit/IOLib.h>
+#include <os/atomic_private.h>
 
 #include "RPiPlatform.h"
 
@@ -98,6 +99,26 @@ rpi_psci_call(uint64_t fn, uint64_t arg0, uint64_t arg1, uint64_t arg2)
 	return (int64_t)x0;
 }
 
+#pragma mark Power-off
+
+static IOLock *power_off_lock;
+static bool (*power_off_fn)(void *);
+static void *power_off_arg;
+static bool panic_began;
+
+bool
+rpi_set_power_off(bool (*fn)(void *arg), void *arg)
+{
+	if (power_off_lock == NULL) {
+		return false;
+	}
+	IOLockLock(power_off_lock);
+	power_off_fn = fn;
+	power_off_arg = fn != NULL ? arg : NULL;
+	IOLockUnlock(power_off_lock);
+	return true;
+}
+
 #pragma mark RPiPlatformExpert
 
 /* RPiGPIOUpdate's lock, made before any driver starts. */
@@ -110,6 +131,9 @@ OSDefineMetaClassAndStructors(RPiPlatformExpert, IODTPlatformExpert);
 bool
 RPiPlatformExpert::start(IOService *provider)
 {
+	if (power_off_lock == NULL) {
+		power_off_lock = IOLockAlloc();
+	}
 	if (!rpi_psci_init()) {
 		IOLog("RPiPlatformExpert: no PSCI node, restart and SMP unavailable\n");
 	} else {
@@ -171,12 +195,26 @@ RPiPlatformExpert::excludeList(void)
 	return "('chosen', 'memory', 'options', 'cpus', 'defaults', 'aliases')";
 }
 
+/*
+ * A halt sets the watchdog's halt count, then calls the board's power-off,
+ * if a driver registered one and no panic has begun, then PSCI SYSTEM_OFF.
+ * By then every driver has had its shutdown notices and the power tree is
+ * quiet.
+ */
 int
 RPiPlatformExpert::haltRestart(unsigned int type)
 {
 	if (type == kPEHaltCPU || type == kPEUPSDelayHaltCPU) {
 		rpi_watchdog_halt();
+		if (!os_atomic_load(&panic_began, relaxed) && power_off_lock != NULL) {
+			IOLockLock(power_off_lock);
+			if (power_off_fn != NULL) {
+				power_off_fn(power_off_arg);
+			}
+			IOLockUnlock(power_off_lock);
+		}
 	} else if (type == kPEPanicBegin) {
+		os_atomic_store(&panic_began, true, relaxed);
 		rpi_watchdog_panic();
 	}
 	if (!psci_ready) {

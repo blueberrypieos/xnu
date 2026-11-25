@@ -17,7 +17,14 @@
 /*
  * An SD memory card behind a host controller: the card's protocol, the
  * block device and the checks of faster modes. A host driver subclasses
- * it and supplies the sd* operations.
+ * it and supplies the sd* operations. From the system's first halt or
+ * restart notice on, no card takes new I/O: a transfer under way ends its
+ * current chunk, and the rest of it, and every later request, fail with
+ * kIOReturnOffline. Each card's notice waits for its transfer under way
+ * until one deadline, kSDStopWaitMs after the first notice, for all cards
+ * together. A transfer still running then is logged, and the halt or
+ * restart goes on. A card still being set up makes no further setup step
+ * that reaches it, and is not published.
  */
 class PIESDCard : public IOBlockStorageDevice
 {
@@ -36,6 +43,7 @@ protected:
 		kSDClockRunHz       = 25000000,
 		kSDClockHighSpeedHz = 50000000,
 	};
+	enum { kSDStopWaitMs = 8000 };
 
 	IOLock *sdLock;
 	uint32_t *sdBounce;
@@ -48,6 +56,9 @@ protected:
 	char sdVendor[16];
 	char sdProduct[16];
 	char sdRevision[8];
+	IONotifier *sdHaltNotifier;
+	bool sdStopDone;
+	bool sdSetupHalted;
 
 	/*
 	 * The host's operations, called with sdLock held. A long response
@@ -71,6 +82,11 @@ protected:
 	bool sdSameAs(const uint8_t *reference, const char *what);
 	void sdSetUpHighSpeed(const uint8_t *reference, const char *bootArg);
 	void sdPublish(const char *location);
+	static bool sdStopping(void);
+	bool sdSetupStopped(void);
+	void sdStop(const char *why);
+	static IOReturn sdHaltRestart(void *target, void *refCon, UInt32 messageType, IOService *provider, void *argument,
+	    vm_size_t size);
 
 public:
 	virtual void free(void) APPLE_KEXT_OVERRIDE;

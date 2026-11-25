@@ -952,18 +952,25 @@ RKDWMMC::gateClock(void)
  * The domains to 3.3 V mode, then the supply to 3.3 V, with SDCLK stopped
  * through both and the 10 ms after. True once the supply reads back
  * 3.3 V; otherwise the domains stay in 3.3 V mode, at or above the supply.
+ * Once the cards' stop is set it changes nothing more and logs nothing.
  */
 bool
 RKDWMMC::raiseSupply(void)
 {
-	if (!gateClock()) {
+	if (!gateClock() || sdStopping()) {
 		return false;
 	}
 	setDomains(IO_3V3);
 	IOReturn ret = supply->setVoltage(supplyNode, IO_3V3);
 	IOSleep(10);
+	if (sdStopping()) {
+		return false;
+	}
 	uint32_t now = 0;
 	IOReturn back = supply->getVoltage(supplyNode, &now);
+	if (sdStopping()) {
+		return false;
+	}
 	if (ret == kIOReturnSuccess && back == kIOReturnSuccess && now == IO_3V3 && domainsAt(IO_3V3)) {
 		IOLog("RKDWMMC: %s: IO at 3300 mV; IO_VSEL0 0x%x, IO_VSEL1 0x%x\n", slot,
 		    RKRead(pmuGrfMap, PMUGRF_IO_VSEL0) & 0xffff, RKRead(pmuGrfMap, PMUGRF_IO_VSEL1) & 0xffff);
@@ -985,7 +992,9 @@ RKDWMMC::readSpec(void)
 		ret = sdReadSmall(51, 0, scr, sizeof(scr));
 	}
 	if (ret != kIOReturnSuccess || (scr[0] >> 4) != 0) {
-		IOLog("RKDWMMC: %s: no SCR (0x%x)\n", slot, ret);
+		if (!sdStopping()) {
+			IOLog("RKDWMMC: %s: no SCR (0x%x)\n", slot, ret);
+		}
 		return -1;
 	}
 	return scr[0] & 0xf;
@@ -1004,12 +1013,14 @@ RKDWMMC::cardSignal(void)
 	uint8_t status[64];
 	IOReturn ret = kIOReturnSuccess;
 	IOLockLock(sdLock);
-	sdSpec = readSpec();
-	if (sdSpec > 0) {
+	if (!sdStopping()) {
+		sdSpec = readSpec();
+	}
+	if (sdSpec > 0 && !sdStopping()) {
 		ret = sdReadSmall(6, 0x00FFFFFF, status, sizeof(status));
 	}
 	IOLockUnlock(sdLock);
-	if (sdSpec < 0) {
+	if (sdSpec < 0 || sdStopping()) {
 		return -1;
 	}
 	if (sdSpec == 0) {
@@ -1044,12 +1055,12 @@ RKDWMMC::setUpHighSpeed(void)
 {
 	uint8_t *reference = (uint8_t *)IOMallocData(kSDCheckBlocks * kSDBlockSize);
 	IOLockLock(sdLock);
-	if (sdSpec < 0) {
+	if (sdSpec < 0 && !sdStopping()) {
 		sdSpec = readSpec();
 	}
-	if (sdSpec <= 0) {
+	if (!sdStopping() && sdSpec <= 0) {
 		IOLog("RKDWMMC: %s: %s; no high speed\n", slot, sdSpec == 0 ? "SD_SPEC 0" : "no SCR");
-	} else if (reference != NULL && busHz >= kSDClockHighSpeedHz && sdReadReference(reference)) {
+	} else if (!sdStopping() && reference != NULL && busHz >= kSDClockHighSpeedHz && sdReadReference(reference)) {
 		sdSetUpHighSpeed(reference, "dwmmc_hs");
 	}
 	IOLockUnlock(sdLock);
@@ -1078,13 +1089,21 @@ bool
 RKDWMMC::setUpCard(void)
 {
 	uint32_t uv = 0;
+	if (sdStopping()) {
+		gateClock();
+		return false;
+	}
 	if (!findSupply(getProvider())) {
 		return sdStart();
 	}
-	IOReturn ret = readSupply(&uv);
+	IOReturn ret = sdStopping() ? kIOReturnOffline : readSupply(&uv);
+	if (sdStopping()) {
+		gateClock();
+		return false;
+	}
 	if (ret != kIOReturnSuccess) {
 		IOLog("RKDWMMC: %s: the IO supply cannot be read (0x%x); the card is not used\n", slot, ret);
-		if (gateClock()) {
+		if (gateClock() && !sdStopping()) {
 			setDomains(IO_3V3);
 		}
 		return false;
@@ -1094,7 +1113,7 @@ RKDWMMC::setUpCard(void)
 	    RKRead(pmuGrfMap, PMUGRF_IO_VSEL1) & 0xffff, rd(DW_STATUS));
 	if (uv == IO_1V8) {
 		if (!domainsAt(IO_1V8)) {
-			if (!gateClock()) {
+			if (!gateClock() || sdStopping()) {
 				return false;
 			}
 			setDomains(IO_1V8);
@@ -1105,6 +1124,10 @@ RKDWMMC::setUpCard(void)
 		if (signal == 1 && domainsAt(IO_1V8)) {
 			return true;
 		}
+		if (sdStopping()) {
+			gateClock();
+			return false;
+		}
 		IOLog("RKDWMMC: %s: %s at 1.8 V; raising the IO supply to 3.3 V\n", slot,
 		    !present ? "no card is set up" : signal == 0 ? "the card is not in 1.8 V signaling" :
 		    signal < 0 ? "the card's signaling is not known" : "the IO domains are not in 1.8 V mode");
@@ -1113,11 +1136,17 @@ RKDWMMC::setUpCard(void)
 		return false;
 	}
 	if (!setUp()) {
-		IOLog("RKDWMMC: %s: no card is set up at 3.3 V\n", slot);
+		if (!sdStopping()) {
+			IOLog("RKDWMMC: %s: no card is set up at 3.3 V\n", slot);
+		}
 		gateClock();
 		return false;
 	}
 	int signal = cardSignal();
+	if (sdStopping()) {
+		gateClock();
+		return false;
+	}
 	if (signal == 1) {
 		IOLog("RKDWMMC: %s: the card is in 1.8 V signaling, and the IO supply is not lowered to 1.8 V; "
 		    "switch the board off and on to use it\n", slot);
@@ -1171,6 +1200,10 @@ RKDWMMC::start(IOService *provider)
 		fifoDepth = OSSwapBigToHostInt32(*(const uint32_t *)fd->getBytesNoCopy());
 	}
 
+	if (sdStopping()) {
+		(void)sdSetupStopped();
+		return false;
+	}
 	RKApplyPinctrl(provider, "RKDWMMC");
 	busHz = ciuClock(provider) / 2;
 	IOLog("RKDWMMC: %s at 0x%llx, version 0x%x, FIFO %u words, controller clock %u MHz%s\n",
@@ -1182,9 +1215,14 @@ RKDWMMC::start(IOService *provider)
 	OSSafeReleaseNULL(supply);
 	OSSafeReleaseNULL(supplyNode);
 	if (!present) {
+		(void)sdSetupStopped();
 		return false;
 	}
 	setUpHighSpeed();
+	if (sdSetupStopped()) {
+		gateClock();
+		return false;
+	}
 	IOLog("RKDWMMC: %u kHz, %s bus\n", sdClockHz / 1000, rd(DW_CTYPE) ? "4-bit" : "1-bit");
 	sdPublish(kIOPropertyInternalKey);
 	return true;

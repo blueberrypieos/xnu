@@ -445,12 +445,18 @@ RPiSDHCI::sdSetBusWidth4(void)
 bool
 RPiSDHCI::dmaSameAs(const uint8_t *reference, const char *what)
 {
+	if (sdStopping()) {
+		return false;
+	}
 	memset(sdBounce, 0xA5, kSDCheckBlocks * kSDBlockSize);
 	IOReturn ret = transferDMA(18, 0, kSDCheckBlocks, false);
 	if (ret == kIOReturnSuccess && memcmp(sdBounce, reference, kSDCheckBlocks * kSDBlockSize) == 0) {
 		return true;
 	}
-	IOLog("RPiSDHCI: %s reads the card %s; left out\n", what, ret == kIOReturnSuccess ? "wrongly" : "with errors");
+	if (!sdStopping()) {
+		IOLog("RPiSDHCI: %s reads the card %s; left out\n", what,
+		    ret == kIOReturnSuccess ? "wrongly" : "with errors");
+	}
 	return false;
 }
 
@@ -568,6 +574,7 @@ RPiSDHCI::start(IOService *provider)
 	    (rd(SDHCI_VERSION) >> 16) & 0xFF, baseClock / 1000000);
 
 	if (!sdStart()) {
+		(void)sdSetupStopped();
 		return false;
 	}
 
@@ -577,14 +584,21 @@ RPiSDHCI::start(IOService *provider)
 		if (caps & CAP_HIGH_SPEED) {
 			sdSetUpHighSpeed(reference, "sdhci_hs");
 		}
-		setUpInterrupt(provider);
-		uint32_t mode = 1;
-		PE_parse_boot_argn("sdhci_dma", &mode, sizeof(mode));
-		setUpDMA(provider, reference, mode);
+		if (!sdStopping()) {
+			setUpInterrupt(provider);
+		}
+		if (!sdStopping()) {
+			uint32_t mode = 1;
+			PE_parse_boot_argn("sdhci_dma", &mode, sizeof(mode));
+			setUpDMA(provider, reference, mode);
+		}
 	}
 	IOLockUnlock(sdLock);
 	if (reference != NULL) {
 		IOFreeData(reference, kSDCheckBlocks * kSDBlockSize);
+	}
+	if (sdSetupStopped()) {
+		return false;
 	}
 	IOLog("RPiSDHCI: %u MHz, %s%s\n", sdClockHz / 1000000,
 	    dma == DMA_ADMA2 ? "ADMA2" : dma == DMA_SDMA ? "SDMA" : "programmed I/O", useIRQ ? ", interrupts" : "");
@@ -605,6 +619,11 @@ RPiSDHCI::setDMAMode(uint32_t mode)
 	}
 	int err = EIO;
 	IOLockLock(sdLock);
+	if (sdStopping()) {
+		IOLockUnlock(sdLock);
+		IOFreeData(reference, kSDCheckBlocks * kSDBlockSize);
+		return ENXIO;
+	}
 	dma = DMA_NONE;
 	if (sdReadReference(reference)) {
 		IOLog("RPiSDHCI: trying DMA mode %u at %u MHz%s\n", mode, sdClockHz / 1000000, useIRQ ? ", interrupts" : "");
