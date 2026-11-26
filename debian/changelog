@@ -1,3 +1,11 @@
+xnu (12377.121.6+pie10) blueberry-pie-os; urgency=medium
+
+  * blueberry-pie-os-kernel-dev has the GPIO kernel headers,
+    pie/PieGPIO.h and pie/PieGPIOKernel.h, for kexts that set their pins
+    through piegpio.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Thu, 26 Nov 2026 02:05:07 +0000
+
 xnu (12377.121.6+pie9) blueberry-pie-os; urgency=medium
 
   * The SD card driver takes no new I/O once the system's halt or

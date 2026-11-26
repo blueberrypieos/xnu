@@ -117,6 +117,8 @@ install:
 	set -e; for p in blueberry-pie-os-kernel blueberry-pie-os-kernel-dev; do \
 		install -D -m 644 debian/README.source $(ROOT)/usr/share/doc/$$p/README.source; \
 	done
+	install -m 444 kexts/GPIO/include/PieGPIO.h kexts/GPIO/include/PieGPIOKernel.h \
+		$(KSDK)/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/pie/
 	debian/sdk-delta.sh $(SDK) $(KSDK) $(ROOT)
 
 .PHONY: install
