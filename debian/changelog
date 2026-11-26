@@ -1,3 +1,10 @@
+xnu (12377.121.6+pie11) blueberry-pie-os; urgency=medium
+
+  * blueberry-pie-os-kernel-dev has the DMA kernel headers, pie/PIEDMA.h
+    and pie/PIEDMAKernel.h, for kexts that move data through PIEDMA.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Thu, 26 Nov 2026 12:10:07 +0000
+
 xnu (12377.121.6+pie10) blueberry-pie-os; urgency=medium
 
   * blueberry-pie-os-kernel-dev has the GPIO kernel headers,

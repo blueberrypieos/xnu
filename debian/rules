@@ -119,6 +119,8 @@ install:
 	done
 	install -m 444 kexts/GPIO/include/PieGPIO.h kexts/GPIO/include/PieGPIOKernel.h \
 		$(KSDK)/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/pie/
+	install -m 444 kexts/DMA/include/PIEDMA.h kexts/DMA/include/PIEDMAKernel.h \
+		$(KSDK)/System/Library/Frameworks/Kernel.framework/Versions/A/PrivateHeaders/pie/
 	debian/sdk-delta.sh $(SDK) $(KSDK) $(ROOT)
 
 .PHONY: install
