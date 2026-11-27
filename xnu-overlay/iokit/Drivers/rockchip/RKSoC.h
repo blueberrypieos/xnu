@@ -48,6 +48,7 @@ IOMemoryMap *RKMapCompatible(const char *compat);
 IOMemoryMap *RKMapPHandle(uint32_t phandle);
 IORegistryEntry *RKFindPHandle(IORegistryEntry *root, uint32_t phandle);
 void RKApplyPinctrl(IOService *provider, const char *driver);
+void RKApplyPinctrlNode(IORegistryEntry *provider, const char *driver);
 IORegistryEntry *RKChildNamed(IORegistryEntry *parent, const char *name);
 uint64_t RKPLLRate(IOMemoryMap *cru, uint32_t con, uint32_t mode, unsigned modeShift);
 bool RKWaitForBootVolume(uint32_t seconds = 60);

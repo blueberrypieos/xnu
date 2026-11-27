@@ -143,6 +143,12 @@ RKChildNamed(IORegistryEntry *parent, const char *name)
 void
 RKApplyPinctrl(IOService *provider, const char *driver)
 {
+	RKApplyPinctrlNode(provider, driver);
+}
+
+void
+RKApplyPinctrlNode(IORegistryEntry *provider, const char *driver)
+{
 	OSData *pc = OSDynamicCast(OSData, provider->getProperty("pinctrl-0"));
 	IORegistryEntry *root = IORegistryEntry::getRegistryRoot();
 	IOMemoryMap *grfMap = RKMapCompatible("rockchip,rk3568-grf");

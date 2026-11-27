@@ -1,0 +1,47 @@
+Description: SDIO on the RG353V internal wireless slot
+ Add the RK3566 SDIO host to the build and match it before the storage
+ host. The new host accepts only the RG353V internal wireless slot.
+Author: The Blueberry Pie OS Authors
+Forwarded: not-needed
+Last-Update: 2026-11-24
+--- a/xnu/iokit/KernelConfigTables.cpp
++++ b/xnu/iokit/KernelConfigTables.cpp
+@@ -30,6 +30,7 @@
+ /* Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)). */
+ /* Modified 2026-11-19: Rockchip RK3566 I2C, PMIC, USB 2 PHY and EHCI drivers (APSL 2.0 section 2.2(b)). */
+ /* Modified 2026-11-20: SDIO on the Raspberry Pi 4 and 5 (APSL 2.0 section 2.2(b)). */
++/* Modified 2026-11-24: SDIO on the RG353V internal wireless slot (APSL 2.0 section 2.2(b)). */
+ /*
+  * NOTICE: This file was modified by SPARTA, Inc. in 2005 to introduce
+  * support for mandatory and extensible security protections.  This notice
+@@ -77,6 +78,12 @@
+     "     'IOClass'         = RPiSDHCISDIO;"
+     "     'IOProviderClass' = IOPlatformDevice;"
+     "     'IONameMatch'     = ('brcm,bcm2835-sdhci', 'brcm,bcm2712-sdhci');"
++    "     'IOProbeScore'    = 1000:32;"
++    "   },"
++    "   {"
++    "     'IOClass'         = RKDWMMSDIO;"
++    "     'IOProviderClass' = IOPlatformDevice;"
++    "     'IONameMatch'     = 'rockchip,rk3568-dw-mshc';"
+     "     'IOProbeScore'    = 1000:32;"
+     "   },"
+     "   {"
+--- a/xnu/iokit/conf/files.arm64
++++ b/xnu/iokit/conf/files.arm64
+@@ -2,6 +2,7 @@
+ # Modified 2026-11-18: Rockchip RK3566 support (APSL 2.0 section 2.2(b)).
+ # Modified 2026-11-19: Rockchip RK3566 I2C, PMIC, USB 2 PHY and EHCI drivers (APSL 2.0 section 2.2(b)).
+ # Modified 2026-11-20: SDIO on the Raspberry Pi 4 and 5 (APSL 2.0 section 2.2(b)).
++# Modified 2026-11-24: SDIO on the RG353V internal wireless slot (APSL 2.0 section 2.2(b)).
+ # Portions Copyright (c) Apple Inc. All rights reserved.
+ #
+ # This file contains Original Code and/or Modifications of Original Code
+@@ -38,6 +39,7 @@
+ iokit/Drivers/sdmmc/PIESDCard.cpp				optional config_rpi
+ iokit/Drivers/sdmmc/PIESDIO.cpp				optional config_rpi
+ iokit/Drivers/rockchip/RKDWMMC.cpp				optional config_rpi
++iokit/Drivers/rockchip/RKDWMMSDIO.cpp				optional config_rpi
+ iokit/Drivers/rockchip/RKSoC.cpp				optional config_rpi
+ iokit/Drivers/rockchip/RKI2C.cpp				optional config_rpi
+ iokit/Drivers/rockchip/RK817.cpp				optional config_rpi

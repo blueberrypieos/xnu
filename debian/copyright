@@ -7982,6 +7982,11 @@ Copyright: 1993-2026 Apple Inc.
  2026 The Blueberry Pie OS Authors
 License: LicenseRef-APSL-2.0-OS-reference AND APSL-2.0
 
+Files: patches/0014-rk3566-sdio.patch
+Copyright: 1998-2012 Apple Inc.
+ 2026 The Blueberry Pie OS Authors
+License: LicenseRef-APSL-2.0-OS-reference AND APSL-2.0
+
 License: Apache-2.0
                                   Apache License
                             Version 2.0, January 2004

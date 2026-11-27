@@ -1,3 +1,9 @@
+xnu (12377.121.6+pie12) blueberry-pie-os; urgency=medium
+
+  * Add SDIO transport for the RG353V internal wireless slot.
+
+ -- Maxwell <maxwell@blueberrypieos.com>  Fri, 27 Nov 2026 12:51:56 +0000
+
 xnu (12377.121.6+pie11) blueberry-pie-os; urgency=medium
 
   * blueberry-pie-os-kernel-dev has the DMA kernel headers, pie/PIEDMA.h
